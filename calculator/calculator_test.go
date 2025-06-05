@@ -2,10 +2,12 @@ package calculator
 
 import (
 	"fmt"
+	"math/rand"
 	"os"
 	"reflect"
 	"testing"
 	"tfccalc/data"
+	"time"
 )
 
 // TestMain sets up the shared DB connection for all tests.
@@ -292,5 +294,53 @@ func TestGetBaseMaterialBreakdown_SteelInsideAlloy(t *testing.T) {
 	want := map[string]float64{"pig_iron": 60.0, "nickel": 24.0, "copper": 12.0, "zinc": 4.0}
 	if !floatMapEqual(res, want, 0.0001) {
 		t.Errorf("getBaseMaterialBreakdown(raw_black_steel) = %v, want %v", res, want)
+	}
+}
+
+// TestRandomValidatePercentages picks random percentage maps for "brass" and checks ValidatePercentages.
+// It ensures that any map drawn uniformly between 0–100 for each ingredient either
+// (a) passes exactly when it lies within [Min,Max] and sums ≈100, or
+// (b) fails otherwise.
+func TestRandomValidatePercentages(t *testing.T) {
+	rand.Seed(time.Now().UnixNano())
+	const iterations = 500
+	// Known ranges for "brass": copper ∈ [88,92], zinc ∈ [8,12]
+	for i := 0; i < iterations; i++ {
+		cu := rand.Float64() * 100.0 // 0..100
+		zn := 100.0 - cu             // so they always sum exactly 100
+		m := map[string]float64{"copper": cu, "zinc": zn}
+		ok, _ := ValidatePercentages("brass", m)
+
+		// The only way it should pass is if cu∈[88,92] and zn∈[8,12] (and they sum=100).
+		inside := (cu >= 88.0 && cu <= 92.0) && (zn >= 8.0 && zn <= 12.0)
+		if ok != inside {
+			t.Errorf("iter %d: ValidatePercentages(brass, %#v) = %v, want %v", i, m, ok, inside)
+		}
+	}
+}
+
+// TestRandomCalculateBreakdown picks a random positive amount (0 < amt ≤ 1000),
+// calls getBaseMaterialBreakdown("brass", amt, nil, 0), and then checks that
+// the returned base‐metal totals sum exactly to amt and that no negative values appear.
+func TestRandomCalculateBreakdown(t *testing.T) {
+	rand.Seed(time.Now().UnixNano())
+	const iterations = 200
+	for i := 0; i < iterations; i++ {
+		amt := rand.Float64()*999.0 + 1.0 // 1…1000 mB
+		m, err := getBaseMaterialBreakdown("brass", amt, nil, 0)
+		if err != nil {
+			t.Fatalf("iteration %d: unexpected error: %v", i, err)
+		}
+		var sum float64
+		for k, v := range m {
+			if v < 0 {
+				t.Errorf("iteration %d: negative amount %f for %q", i, v, k)
+			}
+			sum += v
+		}
+		// Because brass always splits exactly 90%/10%, sum should equal amt (within tiny epsilon).
+		if diff := sum - amt; diff < -1e-6 || diff > 1e-6 {
+			t.Errorf("iteration %d: sum of breakdown = %f, want %f", i, sum, amt)
+		}
 	}
 }
