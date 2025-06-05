@@ -40,7 +40,7 @@ jobs:
 
       - name: Load database schema
         run: |
-          mysql -h127.0.0.1 -uroot -ppassword tfccalc < schema.sql
+          mysql -h127.0.0.1 -uroot -ppassword tfccalc < db/schema.sql
 
       - name: Set up Go
         uses: actions/setup-go@v4
