@@ -1,4 +1,3 @@
-// ui/percent_inputs.go
 package ui
 
 import (

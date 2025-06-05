@@ -1,4 +1,3 @@
-// ui/tree_renderer.go
 package ui
 
 import (

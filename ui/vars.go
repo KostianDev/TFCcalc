@@ -1,4 +1,3 @@
-// ui/vars.go
 package ui
 
 import (

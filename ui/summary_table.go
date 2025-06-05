@@ -1,4 +1,3 @@
-// ui/summary_table.go
 package ui
 
 import (

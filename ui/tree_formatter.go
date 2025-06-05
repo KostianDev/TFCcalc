@@ -1,4 +1,3 @@
-// ui/tree_formatter.go
 package ui
 
 import (
