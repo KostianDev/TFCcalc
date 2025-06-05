@@ -17,16 +17,16 @@ import (
 )
 
 var (
-	alloyNames             []string                                  // Slice to store the names of available alloys.
-	alloyIDs               = map[string]string{}                     // Map to store the ID of each alloy, using its name as the key.
+	alloyNames             []string                                    // Slice to store the names of available alloys.
+	alloyIDs               = map[string]string{}                       // Map to store the ID of each alloy, using its name as the key.
 	alloyPercentageEntries = make(map[string]map[string]*widget.Entry) // Map to store the user input fields for alloy percentages. The outer key is the alloy ID, and the inner map uses ingredient IDs as keys to access the corresponding entry field.
 	percentageAccordion    *widget.Accordion                           // Accordion widget to display and manage user-adjustable alloy percentages.
 	resultTree             *widget.Tree                                // Tree widget to display the hierarchical breakdown of alloy ingredients.
 	treeRoots              []*calculationNode                          // Slice to store the root nodes of the calculation tree.
 	treeNodes              map[widget.TreeNodeID]*calculationNode      // Map to quickly access any node in the tree using its ID.
 	summaryTable           *widget.Table                               // Table widget to display a summary of the required base materials.
-	summaryData            [][]string                                // Two-dimensional slice to hold the data for the summary table.
-	currentAlloyID         string                                     // Stores the ID of the currently selected alloy.
+	summaryData            [][]string                                  // Two-dimensional slice to hold the data for the summary table.
+	currentAlloyID         string                                      // Stores the ID of the currently selected alloy.
 	amountEntry            *widget.Entry                               // Input field for the desired amount of the target alloy.
 	modeRadio              *widget.RadioGroup                          // Radio group to select the calculation mode (by mB or by Ingots).
 	statusLabel            *widget.Label                               // Label to display status messages and calculation results.
@@ -353,7 +353,13 @@ func buildAccordionItemsRecursive(alloyID string, acc *widget.Accordion, visited
 // BuildUI creates and returns the main window of the application.
 // It initializes all UI elements, sets up event handlers, and arranges the layout.
 func BuildUI(app fyne.App) fyne.Window {
+	resouceIcon, err := fyne.LoadResourceFromPath("./assets/tfc_icon.png")
+	if err != nil {
+		log.Println("Error loading resource icon:", err)
+	}
+
 	win := app.NewWindow("TFC Alloy Calculator")
+	win.SetIcon(resouceIcon)
 	win.SetMaster()
 	alloyNames = make([]string, 0, len(data.TfcAlloys))
 	alloyIDs = make(map[string]string)
