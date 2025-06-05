@@ -1,23 +1,78 @@
-// Package calculator contains the core logic for calculating alloy component requirements.
+// Package calculator contains the core logic for computing required base materials.
 package calculator
 
 import (
 	"errors"
 	"fmt"
-	"log" // Keep log for warnings for now, can be removed later
+	"log"
 	"math"
-	"tfccalc/data" // Import the data definitions
+	"tfccalc/data"
 )
 
-// GetDefaultPercentages calculates the default percentages for an alloy's ingredients
-// by taking the midpoint of their defined min/max range.
-// It adjusts the first ingredient slightly if rounding causes the total not to be exactly 100%.
+// ResolvePercentagesForAlloy gathers and validates a percentage map for the given alloyID.
+// If the user provided custom percentages (userPerc), it will be filled out with defaults
+// for any missing ingredient, then validated. If userPerc is empty or invalid, defaults are returned.
+func ResolvePercentagesForAlloy(alloyID string, userPerc map[string]float64) (map[string]float64, error) {
+	alloy, ok := data.GetAlloyByID(alloyID)
+	if !ok {
+		return nil, fmt.Errorf("alloy %s not found", alloyID)
+	}
+
+	// If this alloy has no ingredients, return an empty map
+	if len(alloy.Ingredients) == 0 {
+		return make(map[string]float64), nil
+	}
+
+	// If userPerc is empty, return defaults
+	if len(userPerc) == 0 {
+		defaults, err := GetDefaultPercentages(alloyID)
+		if err != nil {
+			return nil, fmt.Errorf("cannot get default percentages for %s: %w", alloyID, err)
+		}
+		return defaults, nil
+	}
+
+	// Copy userPerc so we don't mutate the original
+	fullPerc := make(map[string]float64)
+	for k, v := range userPerc {
+		fullPerc[k] = v
+	}
+
+	// If some ingredients are missing, fill with defaults
+	if len(fullPerc) < len(alloy.Ingredients) {
+		defaults, defErr := GetDefaultPercentages(alloyID)
+		if defErr == nil {
+			for _, ing := range alloy.Ingredients {
+				if _, exists := fullPerc[ing.IngredientID]; !exists {
+					fullPerc[ing.IngredientID] = defaults[ing.IngredientID]
+				}
+			}
+		}
+	}
+
+	// Validate the completed map of percentages
+	valid, valErr := ValidatePercentages(alloyID, fullPerc)
+	if valid {
+		return fullPerc, nil
+	}
+
+	// If user percentages are invalid, log a warning and return defaults
+	log.Printf("Warning: invalid user percentages for %s (%v), using defaults", alloyID, valErr)
+	defaults, err := GetDefaultPercentages(alloyID)
+	if err != nil {
+		return nil, fmt.Errorf("cannot get default percentages for %s after invalid user input: %w", alloyID, err)
+	}
+	return defaults, nil
+}
+
+// GetDefaultPercentages computes midpoint percentages between Min and Max
+// and ensures they sum to exactly 100. If rounding causes a small discrepancy,
+// the difference is added to the first ingredient.
 func GetDefaultPercentages(alloyID string) (map[string]float64, error) {
 	alloy, ok := data.GetAlloyByID(alloyID)
 	if !ok {
 		return nil, fmt.Errorf("alloy %s not found", alloyID)
 	}
-	// Base materials or alloys without defined ingredients have no defaults.
 	if len(alloy.Ingredients) == 0 {
 		return make(map[string]float64), nil
 	}
@@ -26,357 +81,246 @@ func GetDefaultPercentages(alloyID string) (map[string]float64, error) {
 	total := 0.0
 	for _, ing := range alloy.Ingredients {
 		mid := (ing.Min + ing.Max) / 2.0
-		percentages[ing.ID] = mid
+		percentages[ing.IngredientID] = mid
 		total += mid
 	}
 
-	// Adjust if the total is not exactly 100 due to averaging
+	// If due to rounding, total != 100, adjust the first ingredient
 	if math.Abs(total-100.0) > 0.01 && len(alloy.Ingredients) > 0 {
 		diff := 100.0 - total
-		firstIngID := alloy.Ingredients[0].ID
-		if _, exists := percentages[firstIngID]; exists {
-			percentages[firstIngID] += diff
+		firstID := alloy.Ingredients[0].IngredientID
+		if _, exists := percentages[firstID]; exists {
+			percentages[firstID] += diff
 		} else {
-			// This should not happen if Ingredients is not empty
-			return nil, fmt.Errorf("internal error: first ingredient %s not found in percentage map during adjustment", firstIngID)
+			return nil, fmt.Errorf("internal error: ingredient %s missing when adjusting defaults for %s", firstID, alloyID)
 		}
 	}
 	return percentages, nil
 }
 
-// ValidatePercentages checks if a given map of percentages for an alloy is valid.
-// It ensures all required ingredients are present, percentages are within the defined [min, max] range,
-// and the total sum is exactly 100%.
-// An empty or nil map is considered valid (implies default percentages should be used).
+// ValidatePercentages checks that:
+// 1) all ingredients are present,
+// 2) each percentage is within [Min - ε, Max + ε],
+// 3) the sum of all percentages is approximately 100.
 func ValidatePercentages(alloyID string, percentages map[string]float64) (bool, error) {
 	alloy, ok := data.GetAlloyByID(alloyID)
 	if !ok {
 		return false, fmt.Errorf("alloy %s not found for validation", alloyID)
 	}
-	// No ingredients to validate, valid only if input map is also empty
+	// If no ingredients exist, only an empty map is valid
 	if len(alloy.Ingredients) == 0 {
 		return len(percentages) == 0, nil
 	}
-	// If percentages map is empty/nil, it's valid (use defaults later)
+	// If the map is empty, treat it as "use defaults"
 	if len(percentages) == 0 {
 		return true, nil
 	}
 
-	totalPercent := 0.0
-	requiredIngCount := len(alloy.Ingredients)
-	providedIngCount := len(percentages)
-
-	// If a non-empty map is provided, it must contain exactly the required ingredients
-	if providedIngCount != requiredIngCount {
-		return false, fmt.Errorf("incorrect number of ingredients in percentage map (expected %d, got %d) for %s", requiredIngCount, providedIngCount, alloyID)
+	// Must have exactly as many keys as there are ingredients
+	if len(percentages) != len(alloy.Ingredients) {
+		return false, fmt.Errorf("expected %d ingredients for %s, got %d", len(alloy.Ingredients), alloyID, len(percentages))
 	}
 
-	// Check each provided percentage
+	total := 0.0
+	eps := 0.001
 	for _, ingData := range alloy.Ingredients {
-		percent, found := percentages[ingData.ID]
+		pct, found := percentages[ingData.IngredientID]
 		if !found {
-			// This check should be redundant if providedIngCount == requiredIngCount, but good practice
-			return false, fmt.Errorf("internal error: ingredient %s percentage missing in map for %s", ingData.ID, alloyID)
+			return false, fmt.Errorf("percentage for %s missing in map for %s", ingData.IngredientID, alloyID)
 		}
-
-		// Allow for small floating point inaccuracies when comparing with min/max
-		epsilon := 0.001
-		if percent < ingData.Min-epsilon || percent > ingData.Max+epsilon {
-			ingName := data.GetAlloyNameByID(ingData.ID) // Get display name for error
-			return false, fmt.Errorf("percentage for %s (%.2f%%) is outside the allowed range [%.0f-%.0f%%] in alloy %s", ingName, percent, ingData.Min, ingData.Max, alloy.Name)
+		if pct < ingData.Min-eps || pct > ingData.Max+eps {
+			name := data.GetAlloyNameByID(ingData.IngredientID)
+			return false, fmt.Errorf("percentage for %s (%.2f%%) outside [%.2f–%.2f] for %s", name, pct, ingData.Min, ingData.Max, alloy.Name)
 		}
-		totalPercent += percent
+		total += pct
 	}
-
-	// Check if the sum is very close to 100
-	if math.Abs(totalPercent-100.0) > 0.01 {
-		return false, fmt.Errorf("sum of percentages for %s (%.2f%%) does not equal 100%%", alloy.Name, totalPercent)
+	if math.Abs(total-100.0) > 0.01 {
+		return false, fmt.Errorf("sum of percentages for %s is %.2f%% (should be 100%%)", alloy.Name, total)
 	}
-
-	return true, nil // Percentages are valid
+	return true, nil
 }
 
-// sumMaterials merges two maps containing material amounts, summing the values for common keys.
-func sumMaterials(materials1, materials2 map[string]float64) map[string]float64 {
-	result := make(map[string]float64)
-	// Copy first map
-	for id, amount := range materials1 {
-		result[id] = amount
+// sumMaterials merges two maps of {baseID → amountMB}, adding the values.
+func sumMaterials(m1, m2 map[string]float64) map[string]float64 {
+	res := make(map[string]float64)
+	for k, v := range m1 {
+		res[k] = v
 	}
-	// Add/Sum values from second map
-	for id, amount := range materials2 {
-		result[id] += amount // += 0 if key doesn't exist in result yet
+	for k, v := range m2 {
+		res[k] += v
 	}
-	return result
+	return res
 }
 
-// getBaseMaterialBreakdown recursively calculates the required amounts of *base* materials
-// (and pig iron) needed to produce a given amount of a target material/alloy.
-// `allUserPercentages` contains user overrides for specific alloys in the hierarchy.
-// `level` tracks recursion depth to prevent infinite loops.
-func getBaseMaterialBreakdown(targetID string, amountMB float64, allUserPercentages map[string]map[string]float64, level int) (map[string]float64, error) {
-	// Basic recursion depth check
+// getBaseMaterialBreakdown recursively expands the given targetID (any alloy or base)
+// into its constituent base materials (type "base"), applying percentages from allUserPerc.
+func getBaseMaterialBreakdown(targetID string, amountMB float64, allUserPerc map[string]map[string]float64, level int) (map[string]float64, error) {
 	if level > 20 {
-		return nil, errors.New("maximum recursion depth exceeded, check for cyclic dependencies")
+		return nil, errors.New("maximum recursion depth exceeded, possible cyclic dependency")
 	}
-
 	targetData, ok := data.GetAlloyByID(targetID)
 	if !ok {
-		return nil, fmt.Errorf("unknown material/alloy ID: %s", targetID)
+		return nil, fmt.Errorf("unknown material ID %s", targetID)
 	}
 
-	// --- Base Cases ---
-	// 1. If it's a base metal, return the required amount of itself.
+	// If it's a base material, return directly
 	if targetData.Type == "base" {
 		return map[string]float64{targetID: amountMB}, nil
 	}
-	// 2. If it's steel, it requires pig iron. Recursively call for pig iron.
+
+	// If it's plain "Steel", resolve to pig_iron at 100%
 	if targetID == "steel" {
-		// Pass percentages down, although pig_iron doesn't use them
-		return getBaseMaterialBreakdown("pig_iron", amountMB, allUserPercentages, level+1)
+		return getBaseMaterialBreakdown("pig_iron", amountMB, allUserPerc, level+1)
 	}
 
-	// --- Recursive Cases ---
-
-	// 3. Handle final steel when it appears as an *ingredient* in another recipe
-	//    (e.g., Black Steel needed for Raw Blue Steel).
-	//    Its cost is the sum of its raw form cost and its extra ingredient cost.
+	// If it's a final steel (e.g. "black_steel"), process RawForm + ExtraIngredient
 	if targetData.Type == "final_steel" {
-		if targetData.RawForm == "" || targetData.ExtraIngredient == "" {
-			return nil, fmt.Errorf("incomplete data for final steel %s (missing RawForm or ExtraIngredient)", targetID)
+		if !targetData.RawFormID.Valid || !targetData.ExtraIngredientID.Valid {
+			return nil, fmt.Errorf("incomplete data for final_steel %s", targetID)
 		}
-		// Calculate cost of raw form part
-		rawCost, err := getBaseMaterialBreakdown(targetData.RawForm, amountMB, allUserPercentages, level+1)
+		// First: break down the raw form
+		rawCost, err := getBaseMaterialBreakdown(targetData.RawFormID.String, amountMB, allUserPerc, level+1)
 		if err != nil {
-			return nil, fmt.Errorf("error calculating raw_form cost (%s) for %s: %w", targetData.RawForm, targetID, err)
+			return nil, fmt.Errorf("error calculating rawForm for %s: %w", targetID, err)
 		}
-		// Calculate cost of extra ingredient part
-		extraCost, err := getBaseMaterialBreakdown(targetData.ExtraIngredient, amountMB, allUserPercentages, level+1)
+		// Second: break down the extra ingredient (pig_iron or another steel)
+		extraCost, err := getBaseMaterialBreakdown(targetData.ExtraIngredientID.String, amountMB, allUserPerc, level+1)
 		if err != nil {
-			return nil, fmt.Errorf("error calculating extra_ingredient cost (%s) for %s: %w", targetData.ExtraIngredient, targetID, err)
+			return nil, fmt.Errorf("error calculating extraIngredient for %s: %w", targetID, err)
 		}
-		// Return the sum
+		// Merge both maps and return
 		return sumMaterials(rawCost, extraCost), nil
 	}
 
-	// 4. Handle regular alloys, processed materials (like steel was handled above), and raw steels.
-	if targetData.Type == "alloy" || targetData.Type == "processed" || targetData.Type == "raw_steel" {
-		// If no ingredients defined (e.g., incomplete data), return empty map.
+	// If it's an intermediate alloy, raw_steel, or processed (other than "steel")
+	if targetData.Type == "alloy" || targetData.Type == "raw_steel" || targetData.Type == "processed" {
+		// If there are no ingredients, return an empty map
 		if len(targetData.Ingredients) == 0 {
 			return make(map[string]float64), nil
 		}
-
-		// Determine which percentages to use for *this specific alloy*
-		percentagesToUse := make(map[string]float64)
-		var err error
-		useCustom := false
-
-		// Check if user provided specific percentages for *this* alloy ID
-		if specificUserPercentages, found := allUserPercentages[targetID]; found && len(specificUserPercentages) > 0 {
-			// Attempt to fill in missing percentages with defaults before validation
-			fullPercMap := make(map[string]float64)
-			for k, v := range specificUserPercentages { fullPercMap[k] = v } // Copy user provided
-
-			if len(fullPercMap) < len(targetData.Ingredients) {
-				 defaultPercentages, defErr := GetDefaultPercentages(targetID)
-				 // Only supplement if defaults were successfully retrieved
-				 if defErr == nil && defaultPercentages != nil {
-					 for _, ing := range targetData.Ingredients {
-						  if _, exists := fullPercMap[ing.ID]; !exists {
-							   fullPercMap[ing.ID] = defaultPercentages[ing.ID] // Add default for missing ingredient
-						  }
-					 }
-				 }
-			}
-
-			// Validate the (potentially supplemented) percentage map
-			valid, validationErr := ValidatePercentages(targetID, fullPercMap)
-			if valid {
-				percentagesToUse = fullPercMap // Use the valid user/supplemented map
-				useCustom = true
-			} else {
-				// Log a warning if invalid user percentages were provided for this level
-				log.Printf("Warning: Invalid user percentages provided for %s (%v), using defaults.", targetID, validationErr)
-				// Fall through to use defaults (useCustom remains false)
-			}
-		}
-
-		// If custom percentages were not used (either not provided or invalid), get defaults
-		if !useCustom {
-			percentagesToUse, err = GetDefaultPercentages(targetID)
+		// Determine which percentages to use (resolve with user overrides or defaults)
+		var percentagesToUse map[string]float64
+		if userMap, found := allUserPerc[targetID]; found {
+			resolved, err := ResolvePercentagesForAlloy(targetID, userMap)
 			if err != nil {
-				return nil, fmt.Errorf("error getting default percentages for %s: %w", targetData.Name, err)
+				// Log warning, but fall back to defaults
+				log.Printf("Warning: cannot resolve user percentages for %s: %v, using defaults", targetID, err)
+				defaults, _ := GetDefaultPercentages(targetID)
+				percentagesToUse = defaults
+			} else {
+				percentagesToUse = resolved
 			}
-			// Validate the defaults just in case
-			validDef, defValErr := ValidatePercentages(targetID, percentagesToUse)
-			if !validDef {
-				return nil, fmt.Errorf("default percentages for %s are invalid: %w", targetData.Name, defValErr)
+		} else {
+			defaults, err := GetDefaultPercentages(targetID)
+			if err != nil {
+				return nil, fmt.Errorf("cannot get default percentages for %s: %w", targetData.Name, err)
 			}
+			percentagesToUse = defaults
 		}
 
-		// Recursively calculate requirements for each ingredient based on determined percentages
-		totalBaseMaterials := make(map[string]float64)
-		for _, ingredient := range targetData.Ingredients {
-			percentage, found := percentagesToUse[ingredient.ID]
-			if !found {
-				// This indicates an internal logic error if validation passed
-				return nil, fmt.Errorf("internal error: percentage not found for %s in alloy %s after validation", ingredient.ID, targetID)
+		// Recursively break down each ingredient
+		total := make(map[string]float64)
+		for _, ing := range targetData.Ingredients {
+			pct, exists := percentagesToUse[ing.IngredientID]
+			if !exists {
+				return nil, fmt.Errorf("internal error: ingredient %s missing after resolving for %s", ing.IngredientID, targetID)
 			}
-			requiredIngAmountMB := amountMB * (percentage / 100.0)
-
-			// Skip calculation if amount is negligible to avoid unnecessary recursion/float issues
-			if requiredIngAmountMB < 0.001 {
+			requiredMB := amountMB * (pct / 100.0)
+			if requiredMB < 0.001 {
 				continue
 			}
-
-			// Recursive call - pass the *entire* allUserPercentages map down
-			baseMaterialsForIngredient, err := getBaseMaterialBreakdown(ingredient.ID, requiredIngAmountMB, allUserPercentages, level+1)
+			sub, err := getBaseMaterialBreakdown(ing.IngredientID, requiredMB, allUserPerc, level+1)
 			if err != nil {
-				// Wrap error for better context
-				return nil, fmt.Errorf("error calculating component %s for %s: %w", ingredient.ID, targetID, err)
+				return nil, fmt.Errorf("error expanding %s for %s: %w", ing.IngredientID, targetID, err)
 			}
-			// Add the results for this ingredient to the total
-			totalBaseMaterials = sumMaterials(totalBaseMaterials, baseMaterialsForIngredient)
+			total = sumMaterials(total, sub)
 		}
-		return totalBaseMaterials, nil
+		return total, nil
 	}
 
-	// Should not reach here if all material types are handled
-	return nil, fmt.Errorf("unhandled material type: %s for %s", targetData.Type, targetID)
+	return nil, fmt.Errorf("unhandled material type %s for %s", targetData.Type, targetID)
 }
 
-// CalculateRequirements is the main exported function to calculate alloy needs.
-// It handles the top-level request, mode switching (mB vs. Ingots),
-// and the special processing steps for final steels (adding extra ingredients).
-// Returns: map of base material ID -> required mB, map of base material ID -> required ingots, error.
-func CalculateRequirements(targetID string, amount float64, mode string, allUserPercentages map[string]map[string]float64) (map[string]float64, map[string]float64, error) {
-	// --- Input Validation ---
+// CalculateRequirements is the main function called by UI.
+// - targetID: ID of the alloy or steel (e.g. "blue_steel", "brass", etc.)
+// - amount: quantity (in MB or ingots, depending on mode)
+// - mode: "mB" or "Ingots"
+// - allUserPerc: nested map[alloyID] → (map[ingredientID] → pct) with any user overrides.
+// Returns two maps: {baseID → mB} and {baseID → Ingots}, or an error.
+func CalculateRequirements(
+	targetID string,
+	amount float64,
+	mode string,
+	allUserPerc map[string]map[string]float64,
+) (map[string]float64, map[string]float64, error) {
+	// --- Input validation ---
 	if amount <= 0 {
 		return nil, nil, errors.New("amount must be positive")
 	}
 	if mode != "mB" && mode != "Ingots" {
-		return nil, nil, errors.New("invalid calculation mode")
+		return nil, nil, errors.New("invalid mode; only \"mB\" or \"Ingots\"")
 	}
 	targetData, ok := data.GetAlloyByID(targetID)
 	if !ok {
-		return nil, nil, fmt.Errorf("alloy with ID '%s' not found", targetID)
+		return nil, nil, fmt.Errorf("alloy %s not found", targetID)
+	}
+
+	// --- Top‐level percentage validation (if user provided overrides for this level) ---
+	idForValidation := targetID
+	if targetData.Type == "final_steel" {
+		// For final steel, validate on its RawForm
+		idForValidation = targetData.RawFormID.String
+	}
+	if userMap, found := allUserPerc[idForValidation]; found && len(userMap) > 0 {
+		_, err := ResolvePercentagesForAlloy(idForValidation, userMap)
+		if err != nil {
+			return nil, nil, fmt.Errorf("invalid user percentages for %s: %w", data.GetAlloyNameByID(idForValidation), err)
+		}
+		// Replace user map with the fully resolved one (including defaults)
+		allUserPerc[idForValidation], _ = ResolvePercentagesForAlloy(idForValidation, userMap)
+	}
+
+	// --- Convert to mB if in "Ingots" mode ---
+	var amountMB float64
+	if mode == "Ingots" {
+		amountMB = amount * 100.0
+	} else {
+		amountMB = amount
 	}
 
 	finalMaterialsMB := make(map[string]float64)
-	var err error
 
-	// --- Validate Top-Level Percentages (if provided) ---
-	// Determine which alloy's percentages need validation (target or its raw form)
-	idForValidation := targetID
+	// Handle final steels separately (RawForm + ExtraIngredient)
 	if targetData.Type == "final_steel" {
-		idForValidation = targetData.RawForm
-	}
-	// Check only if percentages for this specific alloy ID exist in the input map
-	if specificPerc, found := allUserPercentages[idForValidation]; found && len(specificPerc) > 0 {
-		// Attempt to fill in missing percentages with defaults before validation
-		fullPercMap := make(map[string]float64)
-		for k, v := range specificPerc { fullPercMap[k] = v }
-
-		alloyToValidate, _ := data.GetAlloyByID(idForValidation)
-		if len(fullPercMap) < len(alloyToValidate.Ingredients) {
-			 defaultPercentages, _ := GetDefaultPercentages(idForValidation)
-			 if defaultPercentages != nil {
-				 for _, ing := range alloyToValidate.Ingredients {
-					 if _, exists := fullPercMap[ing.ID]; !exists {
-						 fullPercMap[ing.ID] = defaultPercentages[ing.ID]
-					 }
-				 }
-			 }
-		}
-		// Validate the potentially completed map
-		valid, validationErr := ValidatePercentages(idForValidation, fullPercMap)
-		if !valid {
-			// Return error if top-level percentages are invalid
-			return nil, nil, fmt.Errorf("invalid user percentages for %s: %w", data.GetAlloyNameByID(idForValidation), validationErr)
-		}
-		// Update the map in allUserPercentages in case defaults were added (important for passing down)
-        allUserPercentages[idForValidation] = fullPercMap
-	} // End top-level validation
-
-	// --- Calculation Logic based on Mode ---
-	if mode == "Ingots" {
-		amountMB := amount * 100.0
-
-		// Special handling for final steels in Ingot mode
-		if targetData.Type == "final_steel" {
-			if targetData.RawForm == "" || targetData.ExtraIngredient == "" {
-				return nil, nil, fmt.Errorf("incomplete data for final steel %s", targetID)
-			}
-
-			// 1. Calculate base materials for the RAW form part
-			rawBreakdown, err := getBaseMaterialBreakdown(targetData.RawForm, amountMB, allUserPercentages, 0)
-			if err != nil {
-				return nil, nil, fmt.Errorf("error calculating raw form %s: %w", targetData.RawForm, err)
-			}
-
-			// 2. Calculate base materials for the EXTRA ingredient part (also scaled by amountMB)
-			//    This recursive call handles cases like Blue Steel needing Black Steel.
-			extraIngredientBreakdown := make(map[string]float64)
-			if targetData.ExtraIngredient == "pig_iron" {
-				// Pig iron is base, cost is just itself
-				extraIngredientBreakdown = map[string]float64{"pig_iron": amountMB}
-			} else {
-				// For other extra ingredients (e.g., Black Steel for Blue Steel),
-				// we need the cost equivalent to the *same amount* in mB.
-				// We can use getBaseMaterialBreakdown directly here.
-				extraIngredientCost, extraErr := getBaseMaterialBreakdown(targetData.ExtraIngredient, amountMB, allUserPercentages, 0)
-				if extraErr != nil {
-					 return nil, nil, fmt.Errorf("error calculating extra ingredient cost (%s): %w", targetData.ExtraIngredient, extraErr)
-				}
-				 extraIngredientBreakdown = extraIngredientCost
-			}
-
-			// 3. Sum the costs
-			finalMaterialsMB = sumMaterials(rawBreakdown, extraIngredientBreakdown)
-
-		} else {
-			// For non-final-steels in Ingot mode, just calculate for amount * 100 mB
-			finalMaterialsMB, err = getBaseMaterialBreakdown(targetID, amountMB, allUserPercentages, 0)
-			if err != nil {
-				return nil, nil, fmt.Errorf("error calculating %s: %w", targetData.Name, err)
-			}
-		}
-
-	} else { // mode == "mB"
-		// In mB mode, calculate the composition "as is".
-		// For final steels, this means calculating the cost of their *raw form*.
-		idToCalculate := targetID
-		if targetData.Type == "final_steel" {
-			idToCalculate = targetData.RawForm
-		}
-		finalMaterialsMB, err = getBaseMaterialBreakdown(idToCalculate, amount, allUserPercentages, 0)
+		raw, err := getBaseMaterialBreakdown(targetData.RawFormID.String, amountMB, allUserPerc, 0)
 		if err != nil {
-			return nil, nil, fmt.Errorf("error calculating %s: %w", data.GetAlloyNameByID(idToCalculate), err)
+			return nil, nil, fmt.Errorf("error calculating raw form for %s: %w", targetID, err)
 		}
-	} // End calculation logic
+		extra, err := getBaseMaterialBreakdown(targetData.ExtraIngredientID.String, amountMB, allUserPerc, 0)
+		if err != nil {
+			return nil, nil, fmt.Errorf("error calculating extra ingredient for %s: %w", targetID, err)
+		}
+		finalMaterialsMB = sumMaterials(raw, extra)
+	} else {
+		// Non‐final materials: break down directly
+		need, err := getBaseMaterialBreakdown(targetID, amountMB, allUserPerc, 0)
+		if err != nil {
+			return nil, nil, err
+		}
+		finalMaterialsMB = need
+	}
 
-	// --- Prepare Final Results ---
+	// Build the {baseID → Ingots} map
 	finalMaterialsIngots := make(map[string]float64)
-	resultMB := make(map[string]float64)
-
-	// Filter out negligible amounts and calculate ingots
-	for id, mb := range finalMaterialsMB {
-		if mb > 0.001 { // Threshold for negligible amounts
-			resultMB[id] = mb
-			finalMaterialsIngots[id] = mb / 100.0
-		}
+	for id, mB := range finalMaterialsMB {
+		finalMaterialsIngots[id] = mB / 100.0
 	}
 
-	// Handle edge case: calculation resulted in nothing (or only negligible amounts)
-	if len(resultMB) == 0 {
-		// If the target was a base metal in mB mode, the result is just itself
-		if targetData.Type == "base" && mode == "mB" {
-			resultMB[targetID] = amount
-			finalMaterialsIngots[targetID] = amount / 100.0
-			return resultMB, finalMaterialsIngots, nil
-		}
-		// Otherwise, maybe return an empty map or an error? Empty maps are probably fine.
+	// Edge case: if nothing returned (e.g. base material in "mB" mode), treat it as itself
+	if len(finalMaterialsMB) == 0 && targetData.Type == "base" && mode == "mB" {
+		finalMaterialsMB[targetID] = amountMB
+		finalMaterialsIngots[targetID] = amountMB / 100.0
 	}
 
-	return resultMB, finalMaterialsIngots, nil
+	return finalMaterialsMB, finalMaterialsIngots, nil
 }

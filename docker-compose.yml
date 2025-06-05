@@ -1,0 +1,17 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: tfccalc_mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: tfccalc_db
+      MYSQL_USER: tfccalc_user
+      MYSQL_PASSWORD: tfccalc_pass
+    ports:
+      - "3306:3306"
+    volumes:
+      - tfccalc-mysql-data:/var/lib/mysql
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+
+volumes:
+  tfccalc-mysql-data:

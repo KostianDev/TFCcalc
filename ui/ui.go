@@ -184,28 +184,38 @@ func buildResultTreeRecursive(alloyID string, amountMB float64, percentages map[
 	recipeSourceAlloy := alloyData
 	processedChildren := false
 	if alloyData.Type == "final_steel" {
-		idForIngredients = alloyData.RawForm
-		recipeSourceAlloy, ok = data.GetAlloyByID(idForIngredients)
-		if !ok {
-			return nil, fmt.Errorf("raw_form %s not found for %s", idForIngredients, alloyID)
+		// Use RawForm for ingredient breakdown first
+		if alloyData.RawFormID.Valid {
+			idForIngredients = alloyData.RawFormID.String
+			recipeSourceAlloy, ok = data.GetAlloyByID(idForIngredients)
+			if !ok {
+				return nil, fmt.Errorf("raw_form %s not found for %s", idForIngredients, alloyID)
+			}
 		}
 		node.Name = fmt.Sprintf("%s (%.2fmB)", alloyData.Name, amountMB)
-		rawNode, err := buildResultTreeRecursive(idForIngredients, amountMB, percentages, visited, level+1, maxLevel)
-		if err != nil {
-			return nil, err
+		// Recurse RawForm
+		if alloyData.RawFormID.Valid {
+			rawNode, err := buildResultTreeRecursive(idForIngredients, amountMB, percentages, visited, level+1, maxLevel)
+			if err != nil {
+				return nil, err
+			}
+			if rawNode != nil {
+				node.Children = append(node.Children, rawNode)
+			}
 		}
-		if rawNode != nil {
-			node.Children = append(node.Children, rawNode)
-		}
-		extraNode, err := buildResultTreeRecursive(alloyData.ExtraIngredient, amountMB, percentages, visited, level+1, maxLevel)
-		if err != nil {
-			return nil, err
-		}
-		if extraNode != nil {
-			node.Children = append(node.Children, extraNode)
+		// Recurse ExtraIngredient
+		if alloyData.ExtraIngredientID.Valid {
+			extraNode, err := buildResultTreeRecursive(alloyData.ExtraIngredientID.String, amountMB, percentages, visited, level+1, maxLevel)
+			if err != nil {
+				return nil, err
+			}
+			if extraNode != nil {
+				node.Children = append(node.Children, extraNode)
+			}
 		}
 		processedChildren = true
 	} else if alloyData.Type == "processed" && alloyID == "steel" {
+		// Steel is 100% pig_iron
 		node.Name = fmt.Sprintf("%s (%.2fmB)", alloyData.Name, amountMB)
 		pigIronNode, err := buildResultTreeRecursive("pig_iron", amountMB, percentages, visited, level+1, maxLevel)
 		if err != nil {
@@ -217,6 +227,7 @@ func buildResultTreeRecursive(alloyID string, amountMB float64, percentages map[
 		processedChildren = true
 	}
 	if !processedChildren && alloyData.Type != "base" && len(recipeSourceAlloy.Ingredients) > 0 {
+		// Standard alloy/raw_steel breakdown
 		node.Name = fmt.Sprintf("%s (%.2fmB)", recipeSourceAlloy.Name, amountMB)
 		currentPercentages, percErr := calculator.GetDefaultPercentages(idForIngredients)
 		if percErr == nil {
@@ -225,13 +236,11 @@ func buildResultTreeRecursive(alloyID string, amountMB float64, percentages map[
 				for k, v := range specPerc {
 					fullPercMap[k] = v
 				}
-				if len(fullPercMap) < len(recipeSourceAlloy.Ingredients) {
-					defaultPercentages, _ := calculator.GetDefaultPercentages(idForIngredients)
-					if defaultPercentages != nil {
-						for _, ing := range recipeSourceAlloy.Ingredients {
-							if _, e := fullPercMap[ing.ID]; !e {
-								fullPercMap[ing.ID] = defaultPercentages[ing.ID]
-							}
+				// Fill missing with defaults
+				for _, ing := range recipeSourceAlloy.Ingredients {
+					if _, exists := fullPercMap[ing.IngredientID]; !exists {
+						if defPercVal, defExists := currentPercentages[ing.IngredientID]; defExists {
+							fullPercMap[ing.IngredientID] = defPercVal
 						}
 					}
 				}
@@ -246,17 +255,14 @@ func buildResultTreeRecursive(alloyID string, amountMB float64, percentages map[
 			return nil, fmt.Errorf("invalid final %% for %s in tree: %w", idForIngredients, finErr)
 		}
 		for _, ing := range recipeSourceAlloy.Ingredients {
-			percentage, ok := currentPercentages[ing.ID]
-			if !ok {
-				continue
-			}
+			percentage := currentPercentages[ing.IngredientID]
 			childAmountMB := amountMB * (percentage / 100.0)
 			if childAmountMB < 0.001 {
 				continue
 			}
-			childNode, err := buildResultTreeRecursive(ing.ID, childAmountMB, percentages, visited, level+1, maxLevel)
+			childNode, err := buildResultTreeRecursive(ing.IngredientID, childAmountMB, percentages, visited, level+1, maxLevel)
 			if err != nil {
-				log.Printf("Error building branch %s for %s: %v", ing.ID, alloyID, err)
+				log.Printf("Error building branch %s for %s: %v", ing.IngredientID, alloyID, err)
 				continue
 			}
 			if childNode != nil {
@@ -286,19 +292,19 @@ func createPercentageInputsForAlloy(alloyID string) (fyne.CanvasObject, error) {
 	alloyPercentageEntries[alloyID] = currentAlloyEntries
 	defaultPercentages, _ := calculator.GetDefaultPercentages(alloyID)
 	for _, ing := range alloy.Ingredients {
-		ingName := data.GetAlloyNameByID(ing.ID)
+		ingName := data.GetAlloyNameByID(ing.IngredientID)
 		label := widget.NewLabel(fmt.Sprintf("%s [%.0f-%.0f%%]:", ingName, ing.Min, ing.Max))
 		entry := widget.NewEntry()
 		entry.Validator = validation.NewRegexp(`^\d+(\.\d+)?$`, "Number")
 		if defaultPercentages != nil {
-			if defPerc, found := defaultPercentages[ing.ID]; found {
+			if defPerc, found := defaultPercentages[ing.IngredientID]; found {
 				entry.PlaceHolder = fmt.Sprintf("%.1f", defPerc)
 			} else {
 				entry.PlaceHolder = "???"
 			}
 		}
 		entry.Wrapping = fyne.TextTruncate
-		currentAlloyEntries[ing.ID] = entry
+		currentAlloyEntries[ing.IngredientID] = entry
 		content.Add(container.NewGridWithColumns(2, label, entry))
 	}
 	return content, nil
@@ -318,7 +324,7 @@ func buildAccordionItemsRecursive(alloyID string, acc *widget.Accordion, visited
 	idForInputs := alloyID
 	alloyForInputs := alloy
 	if alloy.Type == "final_steel" {
-		idForInputs = alloy.RawForm
+		idForInputs = alloy.RawFormID.String
 		alloyForInputs, ok = data.GetAlloyByID(idForInputs)
 		if !ok {
 			return
@@ -332,13 +338,13 @@ func buildAccordionItemsRecursive(alloyID string, acc *widget.Accordion, visited
 		accordionItem := widget.NewAccordionItem(fmt.Sprintf("Configure: %s", alloyForInputs.Name), content)
 		acc.Append(accordionItem)
 		for _, ing := range alloyForInputs.Ingredients {
-			ingAlloy, ingOk := data.GetAlloyByID(ing.ID)
+			ingAlloy, ingOk := data.GetAlloyByID(ing.IngredientID)
 			if !ingOk {
 				continue
 			}
-			nextID := ing.ID
+			nextID := ing.IngredientID
 			if ingAlloy.Type == "final_steel" {
-				nextID = ingAlloy.RawForm
+				nextID = ingAlloy.RawFormID.String
 			}
 			nextAlloy, nextOk := data.GetAlloyByID(nextID)
 			if nextOk && (nextAlloy.Type == "alloy" || nextAlloy.Type == "raw_steel") && len(nextAlloy.Ingredients) > 0 {
@@ -361,15 +367,19 @@ func BuildUI(app fyne.App) fyne.Window {
 	win := app.NewWindow("TFC Alloy Calculator")
 	win.SetIcon(resouceIcon)
 	win.SetMaster()
-	alloyNames = make([]string, 0, len(data.TfcAlloys))
+
+	// Build the alloy selector from the database
+	alloyNames = []string{}
 	alloyIDs = make(map[string]string)
-	for id, alloyData := range data.TfcAlloys {
+	alloys := data.GetAllAlloys()
+	for id, alloyData := range alloys {
 		if alloyData.Type == "alloy" || alloyData.Type == "final_steel" {
 			alloyNames = append(alloyNames, alloyData.Name)
 			alloyIDs[alloyData.Name] = id
 		}
 	}
 	sort.Strings(alloyNames)
+
 	alloySelector := widget.NewSelect(alloyNames, func(selectedName string) {
 		newID := alloyIDs[selectedName]
 		if currentAlloyID == newID {
@@ -385,8 +395,9 @@ func BuildUI(app fyne.App) fyne.Window {
 		percentageAccordion.Items = []*widget.AccordionItem{}
 		visited := make(map[string]bool)
 		startID := currentAlloyID
-		if data.TfcAlloys[currentAlloyID].Type == "final_steel" {
-			startID = data.TfcAlloys[currentAlloyID].RawForm
+		alloyData, _ := data.GetAlloyByID(currentAlloyID)
+		if alloyData.Type == "final_steel" {
+			startID = alloyData.RawFormID.String
 		}
 		buildAccordionItemsRecursive(startID, percentageAccordion, visited)
 		percentageAccordion.Refresh()
@@ -411,22 +422,27 @@ func BuildUI(app fyne.App) fyne.Window {
 		statusLabel.SetText("Select amount and mode, then press 'Calculate'.")
 	})
 	alloySelector.PlaceHolder = "Select alloy..."
+
 	amountEntry = widget.NewEntry()
 	amountEntry.SetPlaceHolder("Amount...")
 	amountEntry.Validator = validation.NewRegexp(`^\d+(\.\d+)?$`, "Number > 0")
+
 	modeRadio = widget.NewRadioGroup([]string{"mB", "Ingots"}, nil)
 	modeRadio.Horizontal = true
 	modeRadio.SetSelected("Ingots")
+
 	percentageAccordion = widget.NewAccordion()
+
 	statusLabel = widget.NewLabel("Enter data and press 'Calculate'.")
 	statusLabel.Wrapping = fyne.TextWrapWord
+
 	treeRoots = []*calculationNode{}
 	treeNodes = make(map[widget.TreeNodeID]*calculationNode)
 	resultTree = widget.NewTree(treeChildren, treeIsBranch, treeCreateNode, treeUpdateNode)
 	resultTree.OnBranchClosed = func(uid widget.TreeNodeID) {}
 	resultTree.OnBranchOpened = func(uid widget.TreeNodeID) {}
+
 	summaryData = [][]string{}
-	// In the section creating summaryTable, the current code is:
 	summaryTable = widget.NewTable(
 		func() (int, int) {
 			return len(summaryData), 3
@@ -437,12 +453,11 @@ func BuildUI(app fyne.App) fyne.Window {
 			return container.NewPadded(label) // Use container for proper padding
 		},
 		func(id widget.TableCellID, cell fyne.CanvasObject) {
-			container := cell.(*fyne.Container)
-			label := container.Objects[0].(*widget.Label)
+			cont := cell.(*fyne.Container)
+			label := cont.Objects[0].(*widget.Label)
 			if id.Row >= 0 && id.Row < len(summaryData) && id.Col >= 0 && id.Col < len(summaryData[id.Row]) {
 				label.SetText(summaryData[id.Row][id.Col])
-
-				// Style and alignment settings
+				// Style and alignment
 				if id.Row == 0 {
 					label.TextStyle.Bold = true
 					label.Alignment = fyne.TextAlignCenter
@@ -461,10 +476,10 @@ func BuildUI(app fyne.App) fyne.Window {
 			label.Refresh()
 		},
 	)
-
 	summaryTable.SetColumnWidth(0, 200)
 	summaryTable.SetColumnWidth(1, 100)
 	summaryTable.SetColumnWidth(2, 100)
+
 	calculateButton := widget.NewButton("Calculate", func() {
 		statusLabel.SetText("Calculating...")
 		selectedAlloyID := currentAlloyID
@@ -511,11 +526,11 @@ func BuildUI(app fyne.App) fyne.Window {
 				}
 				if defaultPercentages != nil {
 					for _, ing := range alloyData.Ingredients {
-						if _, exists := finalPercMap[ing.ID]; !exists {
-							if defPercVal, defExists := defaultPercentages[ing.ID]; defExists {
-								finalPercMap[ing.ID] = defPercVal
+						if _, exists := finalPercMap[ing.IngredientID]; !exists {
+							if defPercVal, defExists := defaultPercentages[ing.IngredientID]; defExists {
+								finalPercMap[ing.IngredientID] = defPercVal
 							} else {
-								validationErrors = append(validationErrors, fmt.Sprintf("No default for %s in %s", data.GetAlloyNameByID(ing.ID), data.GetAlloyNameByID(alloyID)))
+								validationErrors = append(validationErrors, fmt.Sprintf("No default for %s in %s", data.GetAlloyNameByID(ing.IngredientID), data.GetAlloyNameByID(alloyID)))
 							}
 						}
 					}
@@ -578,12 +593,22 @@ func BuildUI(app fyne.App) fyne.Window {
 			summaryTable.Refresh()
 		}
 	})
-	inputForm := container.NewVBox(widget.NewLabel("Target Alloy:"), alloySelector, widget.NewLabel("Amount:"), amountEntry, widget.NewLabel("Mode:"), modeRadio)
+
+	inputForm := container.NewVBox(
+		widget.NewLabel("Target Alloy:"),
+		alloySelector,
+		widget.NewLabel("Amount:"),
+		amountEntry,
+		widget.NewLabel("Mode:"),
+		modeRadio,
+	)
 	percentageScroll := container.NewVScroll(percentageAccordion)
 	percentageScroll.SetMinSize(fyne.NewSize(0, 180))
 	leftPanel := container.NewBorder(inputForm, calculateButton, nil, nil, percentageScroll)
+
 	treeLabel := widget.NewLabelWithStyle("Calculation Hierarchy:", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 	treeScroll := container.NewVScroll(resultTree)
+
 	summaryLabel := widget.NewLabelWithStyle("Final Summary (Base Materials):", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 	summaryScroll := container.NewVScroll(summaryTable)
 	summaryScroll.Content = summaryTable
@@ -597,22 +622,29 @@ func BuildUI(app fyne.App) fyne.Window {
 			layout.NewSpacer(), // Add spacer
 		),
 	)
+
 	resultsSplit := container.NewVSplit(
 		container.NewBorder(treeLabel, nil, nil, nil, treeScroll),
 		summaryContainer,
 	)
 	resultsSplit.Offset = 0.65
+
 	rightPanel := container.NewBorder(
 		statusLabel,
 		nil,
 		nil, nil,
 		resultsSplit,
 	)
+
 	split := container.NewHSplit(leftPanel, rightPanel)
 	split.Offset = 0.40
+
 	win.SetContent(split)
 	win.Resize(fyne.NewSize(1000, 700))
 	win.SetFixedSize(false)
+
+	// Initial placeholder in the accordion
 	percentageAccordion.Append(widget.NewAccordionItem("Percentage Configuration", widget.NewLabel("Select an alloy to configure.")))
+
 	return win
 }

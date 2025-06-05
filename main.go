@@ -1,16 +1,23 @@
-// Package main is the entry point for the TFC Alloy Calculator application.
 package main
 
 import (
+	"fmt"
+	"log"
+	"tfccalc/data"
+	"tfccalc/ui"
+
 	"fyne.io/fyne/v2/app"
-	"tfccalc/ui" // Import our UI package
 )
 
 func main() {
-	// Create a new Fyne application
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true&charset=utf8mb4",
+		"tfccalc_user", "tfccalc_pass", "127.0.0.1", 3306, "tfccalc_db",
+	)
+	if err := data.InitDB(dsn); err != nil {
+		log.Fatalf("Failed to initialize DB: %v", err)
+	}
+
 	myApp := app.New()
-	// Build the main window using the function from the ui package
 	myWindow := ui.BuildUI(myApp)
-	// Show the window and run the application loop
 	myWindow.ShowAndRun()
 }

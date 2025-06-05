@@ -2,9 +2,13 @@ module tfccalc
 
 go 1.24.0
 
-require fyne.io/fyne/v2 v2.6.0
+require (
+	fyne.io/fyne/v2 v2.6.0
+	github.com/go-sql-driver/mysql v1.9.2
+)
 
 require (
+	filippo.io/edwards25519 v1.1.0 // indirect
 	fyne.io/systray v1.11.0 // indirect
 	github.com/BurntSushi/toml v1.4.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
