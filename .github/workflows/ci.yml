@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+    branches:
+      - '**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: password
+          MYSQL_DATABASE: tfccalc
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -ppassword"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Wait for MySQL to be ready
+        run: |
+          for i in {1..30}; do
+            mysql -h127.0.0.1 -uroot -ppassword -e "SELECT 1" && break
+            echo "Waiting for MySQL ($i)..."
+            sleep 2
+          done
+
+      - name: Load database schema
+        run: |
+          mysql -h127.0.0.1 -uroot -ppassword tfccalc < schema.sql
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: "1.24"
+
+      - name: Install dependencies
+        run: go mod tidy
+
+      - name: Run tests via Makefile
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_USER: root
+          DB_PASS: password
+          DB_NAME: tfccalc
+        run: make test
