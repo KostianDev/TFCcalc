@@ -13,7 +13,7 @@ BINARY := tfccalc
 
 all: db-up test build run
 
-# Start MySQL only if not already running, then wait until ready
+# Start MySQL only if not already running, then wait a fixed time for initialization
 db-up:
 	@running=$$(docker-compose ps -q mysql | xargs docker inspect -f '{{.State.Running}}'); \
 	if [ "$$running" != "true" ]; then \
@@ -22,11 +22,14 @@ db-up:
 	else \
 		echo "MySQL container already running"; \
 	fi
-	@echo "Waiting for MySQL TCP port to open..."
-	@bash -c 'while ! </dev/tcp/127.0.0.1/3306; do sleep 1; done'
-	@echo "TCP port 3306 is open; pausing 5 more seconds for full initialization..."
+ifeq ($(OS),Windows_NT)
+	@echo "Waiting 5 seconds for MySQL to initialize (Windows)..."
+	@powershell -Command "Start-Sleep -Seconds 5"
+else
+	@echo "Waiting 5 seconds for MySQL to initialize (Linux/macOS)..."
 	@sleep 5
-	@echo "MySQL is ready."
+endif
+	@echo "MySQL should be ready."
 
 # Stop MySQL container
 db-down:
