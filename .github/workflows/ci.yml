@@ -16,7 +16,8 @@ jobs:
       mysql:
         image: mysql:8.0
         env:
-          MYSQL_ROOT_PASSWORD: rootpassword
+          MYSQL_ROOT_PASSWORD: password
+          MYSQL_ROOT_HOST: '%'
           MYSQL_DATABASE: tfccalc_db
         ports:
           - 3306:3306
