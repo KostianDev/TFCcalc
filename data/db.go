@@ -40,7 +40,11 @@ var (
 func InitDB(dsn string) error {
 	var err error
 	initOnce.Do(func() {
-		db, err = sql.Open("mysql", dsn+"&parseTime=true&charset=utf8mb4")
+		db, err = sql.Open(
+			"mysql",
+			dsn+"?parseTime=true&charset=utf8mb4&allowNativePasswords=true",
+		)
+
 		if err != nil {
 			log.Printf("Error opening MySQL: %v", err)
 			return
