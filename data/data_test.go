@@ -1,4 +1,3 @@
-// data/data_test.go
 package data
 
 import (
