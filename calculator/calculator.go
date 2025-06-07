@@ -288,7 +288,7 @@ func CalculateRequirements(
 		amountMB = amount
 	}
 
-	finalMaterialsMB := make(map[string]float64)
+	var finalMaterialsMB map[string]float64
 
 	// Handle final steels separately (RawForm + ExtraIngredient)
 	if targetData.Type == "final_steel" {
