@@ -20,7 +20,7 @@ jobs:
           MYSQL_ROOT_HOST: '%'
           MYSQL_DATABASE: tfccalc_db
         ports:
-          - 3306:3306
+          - 3405:3306
         options: >-
           --health-cmd="mysqladmin ping -h localhost -ppassword"
           --health-interval=10s
@@ -62,7 +62,7 @@ jobs:
       - name: Run tests via Makefile
         env:
           DB_HOST: 127.0.0.1
-          DB_PORT: 3306
+          DB_PORT: 3405
           DB_USER: tfccalc_user
           DB_PASS: tfccalc_pass
           DB_NAME: tfccalc_db
