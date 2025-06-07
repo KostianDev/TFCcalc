@@ -3,7 +3,7 @@ module tfccalc
 go 1.24.0
 
 require (
-	fyne.io/fyne/v2 v2.6.0
+	fyne.io/fyne/v2 v2.6.1
 	github.com/go-sql-driver/mysql v1.9.2
 )
 
