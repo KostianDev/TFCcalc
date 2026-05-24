@@ -9,35 +9,35 @@ var (
 	alloyNames []string
 	alloyIDs   map[string]string
 
-	// Stores slider controls for each alloy ingredient percentage.
+	// Slider controls per alloy ingredient.
 	alloyPercentageControls map[string]map[string]*percentageControl
 
-	// Per-alloy warning label for auto-clamp messages.
+	// Warning label per alloy for auto-clamp notices.
 	alloyPercentageWarnings map[string]*widget.Label
 
-	// Per-alloy guard to avoid recursive slider updates.
+	// Guard per alloy to avoid recursive slider updates.
 	alloyPercentageUpdating map[string]bool
 
-	// Accordion, куди ми кладемо всі “Configure: <Alloy>” пункти
+	// Accordion that holds all "Configure: <Alloy>" sections.
 	percentageAccordion *widget.Accordion
 
-	// VBox-контейнер, у якому будуть кольорові рядки деревовидного ASCII
+	// VBox container for colored ASCII tree lines.
 	hierarchyContainer *fyne.Container
 
-	// Таблиця підсумкових матеріалів (Material, mB, Ingots)
+	// Summary table (Material, mB, Ingots).
 	summaryTable *widget.Table
-	// Дані для цієї таблиці (рядки)
+	// Summary table data rows.
 	summaryData [][]string
 
-	// ID поточного вибраного сплаву (заповнюється після Select)
+	// Currently selected alloy ID.
 	currentAlloyID string
 
-	// Поле вводу бажаної кількості (Entry)
+	// Amount input field.
 	amountEntry *widget.Entry
 
-	// RadioGroup для вибору “mB” чи “Ingots”
+	// Mode selector (mB or Ingots).
 	modeRadio *widget.RadioGroup
 
-	// Label для статусних повідомлень
+	// Status message label.
 	statusLabel *widget.Label
 )

@@ -17,25 +17,11 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-//
-// This file ties everything together:
-//  1) Alloy selector (Select dropdown)
-//  2) Amount entry (Entry) + Mode radio (RadioGroup)
-//  3) Percentage accordion
-//  4) Tree rendering (calls formatHierarchy → RenderLines)
-//  5) Summary table updates
-//
-// BuildUI(app) constructs a fx.Window, lays out controls on the left,
-// and puts status + hierarchy + summary on the right. The “Calculate”
-// callback triggers buildResultTreeRecursive → formatHierarchy → RenderLines,
-// then calls UpdateSummaryData() for the summary.
-//
-// Global state (alloyNames, alloyIDs, percentage entries, etc.) all come from vars.go.
-//
+// BuildUI wires the main window: inputs on the left, results on the right.
 
 // BuildUI creates and returns the main window of the application.
 func BuildUI(app fyne.App) fyne.Window {
-	// 0) Predefined color palette: must match the one in tree_renderer.go
+	// Predefined color palette: must match the one in tree_renderer.go.
 	palette := []color.Color{
 		color.RGBA{R: 255, G: 102, B: 102, A: 255}, // Light Red
 		color.RGBA{R: 102, G: 255, B: 102, A: 255}, // Light Green
@@ -45,7 +31,7 @@ func BuildUI(app fyne.App) fyne.Window {
 		color.RGBA{R: 153, G: 255, B: 255, A: 255}, // Light Cyan
 	}
 
-	// 1) Load icon if available
+	// Load icon if available.
 	resIcon, err := fyne.LoadResourceFromPath("./assets/tfc_icon.png")
 	if err != nil {
 		log.Println("Error loading icon:", err)
@@ -55,7 +41,7 @@ func BuildUI(app fyne.App) fyne.Window {
 	win.SetIcon(resIcon)
 	win.SetMaster()
 
-	// 2) Initialize alloyNames + alloyIDs for the Select dropdown
+	// Initialize alloyNames and alloyIDs for the dropdown.
 	alloyNames = []string{}
 	alloyIDs = make(map[string]string)
 	for id, alloyData := range data.GetAllAlloys() {
@@ -73,13 +59,13 @@ func BuildUI(app fyne.App) fyne.Window {
 		}
 		currentAlloyID = newID
 
-		// When user chooses a new alloy, clear previous percentage fields and the tree.
+		// Reset percentage controls and result panes on selection.
 		alloyPercentageControls = make(map[string]map[string]*percentageControl)
 		alloyPercentageWarnings = make(map[string]*widget.Label)
 		alloyPercentageUpdating = make(map[string]bool)
 		percentageAccordion.Items = nil
 
-		// Build accordion items recursively starting from the raw form if this is final_steel.
+		// Build accordion items, starting from the raw form for final_steel.
 		visited := make(map[string]bool)
 		startID := currentAlloyID
 		if alloy, ok := data.GetAlloyByID(currentAlloyID); ok && alloy.Type == "final_steel" {
@@ -97,7 +83,7 @@ func BuildUI(app fyne.App) fyne.Window {
 			percentageAccordion.Refresh()
 		}
 
-		// Clear tree and summary
+		// Clear tree and summary.
 		hierarchyContainer.Objects = nil
 		hierarchyContainer.Refresh()
 
@@ -108,21 +94,21 @@ func BuildUI(app fyne.App) fyne.Window {
 	})
 	alloySelector.PlaceHolder = "Select alloy..."
 
-	// 3) Amount entry
+	// Amount entry.
 	amountEntry = widget.NewEntry()
 	amountEntry.PlaceHolder = "Amount..."
 	amountEntry.Validator = validation.NewRegexp(`^\d+(\.\d+)?$`, "Number > 0")
 
-	// 4) Mode radio group (“mB” or “Ingots”)
+	// Mode radio group (mB or Ingots).
 	modeRadio = widget.NewRadioGroup([]string{"mB", "Ingots"}, nil)
 	modeRadio.Horizontal = true
 	modeRadio.SetSelected("Ingots")
 
-	// 5) Status label (wrapped text)
+	// Status label.
 	statusLabel = widget.NewLabel("Enter data and press Calculate.")
 	statusLabel.Wrapping = fyne.TextWrapWord
 
-	// 6) Percentage accordion inside a scroll container
+	// Percentage accordion inside a scroll container.
 	percentageAccordion = widget.NewAccordion()
 	alloyPercentageControls = make(map[string]map[string]*percentageControl)
 	alloyPercentageWarnings = make(map[string]*widget.Label)
@@ -130,15 +116,15 @@ func BuildUI(app fyne.App) fyne.Window {
 	accordionScroll := container.NewVScroll(percentageAccordion)
 	accordionScroll.SetMinSize(fyne.NewSize(0, 200))
 
-	// 7) Hierarchy container (VBox) + scroll
+	// Hierarchy container and scroll.
 	hierarchyContainer = container.NewVBox()
 	hierarchyScroll := container.NewScroll(hierarchyContainer)
 	hierarchyScroll.SetMinSize(fyne.NewSize(0, 300))
 
-	// 8) Summary table setup
+	// Summary table setup.
 	summaryTable = InitSummaryTable()
 
-	// 9) Calculate button: gathers input, builds tree, renders lines, updates summary.
+	// Calculate button: gather input, build tree, update summary.
 	calcButton := widget.NewButton("Calculate", func() {
 		statusLabel.SetText("Calculating...")
 		selected := currentAlloyID
@@ -159,7 +145,7 @@ func BuildUI(app fyne.App) fyne.Window {
 			return
 		}
 
-		// 9.1) Collect user‐entered percentages into userPercs
+		// Collect percentages from sliders.
 		userPercs := make(map[string]map[string]float64)
 		var validationErrors []string
 		for alloyID, controlMap := range alloyPercentageControls {
@@ -202,7 +188,7 @@ func BuildUI(app fyne.App) fyne.Window {
 			return
 		}
 
-		// 9.2) Build the calculation tree
+		// Build the calculation tree.
 		rootMB := amt
 		if mode == "Ingots" {
 			rootMB = amt * 100.0
@@ -219,7 +205,7 @@ func BuildUI(app fyne.App) fyne.Window {
 			for _, ln := range lines {
 				var segments []fyne.CanvasObject
 				depth := len(ln.PrefixParts) - 1
-				// Draw ancestor bars/spaces
+				// Draw ancestor bars/spaces.
 				for lvl := 0; lvl < depth; lvl++ {
 					if ln.PrefixParts[lvl] {
 						txt := canvas.NewText("    ", color.White)
@@ -231,7 +217,7 @@ func BuildUI(app fyne.App) fyne.Window {
 						segments = append(segments, txt)
 					}
 				}
-				// Draw branch symbol
+				// Draw branch symbol.
 				branchSymbol := "├── "
 				if ln.IsLast {
 					branchSymbol = "└── "
@@ -239,7 +225,7 @@ func BuildUI(app fyne.App) fyne.Window {
 				brText := canvas.NewText(branchSymbol, palette[depth%len(palette)])
 				brText.TextStyle = fyne.TextStyle{Monospace: true}
 				segments = append(segments, brText)
-				// Draw node text
+				// Draw node text.
 				nodeTxt := canvas.NewText(ln.Text, palette[depth%len(palette)])
 				nodeTxt.TextStyle = fyne.TextStyle{Monospace: true}
 				segments = append(segments, nodeTxt)
@@ -253,11 +239,11 @@ func BuildUI(app fyne.App) fyne.Window {
 			data.GetAlloyNameByID(selected), amt, mode,
 		))
 
-		// 9.3) Update summary table
+		// Update summary table.
 		UpdateSummaryData(finalMB, summaryTable)
 	})
 
-	// 10) Left panel: Select dropdown, Amount entry, Mode radio, Accordion, Button
+	// Left panel: inputs and controls.
 	inputForm := container.NewVBox(
 		widget.NewLabel("Target Alloy:"),
 		alloySelector,
@@ -274,7 +260,7 @@ func BuildUI(app fyne.App) fyne.Window {
 		container.NewVScroll(percentageAccordion),
 	)
 
-	// 11) Right panel: Status label, then a VSplit of hierarchy + summary
+	// Right panel: status, hierarchy, summary.
 	statusLabel = widget.NewLabel("Enter data and press Calculate.")
 	statusLabel.Wrapping = fyne.TextWrapWord
 
@@ -314,7 +300,7 @@ func BuildUI(app fyne.App) fyne.Window {
 		rightSplit,
 	)
 
-	// 12) Main HSplit: leftPanel | rightContent
+	// Main split: left and right panels.
 	mainSplit := container.NewHSplit(leftPanel, rightContent)
 	mainSplit.SetOffset(0.35)
 

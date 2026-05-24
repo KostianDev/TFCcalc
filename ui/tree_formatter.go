@@ -7,33 +7,20 @@ import (
 	"tfccalc/data"
 )
 
-//
-// This file contains “pure” logic for building the calculation tree and formatting it
-// into a slice of lineInfo structs. It does not create any Fyne widgets.
-//
-// - calculationNode
-// - buildResultTreeRecursive
-// - lineInfo, collectLines, formatHierarchy
-//
+// Tree formatting helpers without UI dependencies.
 
-// calculationNode represents one node in the ingredient‐breakdown tree.
+// calculationNode represents one node in the ingredient tree.
 type calculationNode struct {
 	ID           string             // Unique ID: "<alloyID>_lvl<level>_<counter>"
-	AlloyID      string             // Underlying alloy/material ID
-	Name         string             // Human‐readable name
-	AmountMB     float64            // Amount in milli‐Buckets
-	AmountIngots float64            // Amount in Ingots (MB / 100)
-	IsBaseMetal  bool               // True if this node is a raw base metal
-	Children     []*calculationNode // Child nodes (ingredients)
+	AlloyID      string             // Alloy/material ID
+	Name         string             // Human-readable name
+	AmountMB     float64            // Amount in milli-buckets
+	AmountIngots float64            // Amount in ingots (MB / 100)
+	IsBaseMetal  bool               // True if this node is a base metal
+	Children     []*calculationNode // Child nodes
 }
 
 // buildResultTreeRecursive builds the calculation tree for a given alloy.
-// Parameters:
-//   - alloyID: ID of the alloy/material to expand.
-//   - amountMB: requested amount in milli‐Buckets.
-//   - percentages: map[alloyID]→map[ingredientID]→percentage override.
-//   - visited: map to track how many times each alloyID has been visited (to avoid infinite loops).
-//   - level, maxLevel: current depth and maximum depth to recurse.
 func buildResultTreeRecursive(
 	alloyID string,
 	amountMB float64,
@@ -45,7 +32,7 @@ func buildResultTreeRecursive(
 		return nil, nil
 	}
 
-	// Generate a unique node ID so that we can display it or test it later.
+	// Generate a unique node ID for display and tests.
 	nodeUID := fmt.Sprintf("%s_lvl%d_%d", alloyID, level, visited[alloyID])
 	visited[alloyID]++
 
@@ -68,17 +55,17 @@ func buildResultTreeRecursive(
 	recipeSource := alloyData
 	processed := false
 
-	// 1) If this is a final_steel alloy, first add its raw form and extra ingredient.
+	// For final_steel, include raw form and extra ingredient.
 	if alloyData.Type == "final_steel" {
 		idForIngredients = alloyData.RawFormID.String
 		recipeSource, ok = data.GetAlloyByID(idForIngredients)
 		if !ok {
 			return nil, fmt.Errorf("raw_form %s not found", idForIngredients)
 		}
-		// Keep the node’s Name as the final steel name, not the raw form.
+		// Keep the final steel name, not the raw form name.
 		node.Name = alloyData.Name
 
-		// Recurse into the raw form
+		// Recurse into the raw form.
 		if alloyData.RawFormID.Valid {
 			if rawNode, err := buildResultTreeRecursive(
 				idForIngredients, amountMB, percentages, visited, level+1, maxLevel,
@@ -86,7 +73,7 @@ func buildResultTreeRecursive(
 				node.Children = append(node.Children, rawNode)
 			}
 		}
-		// Recurse into any extra ingredient
+		// Recurse into extra ingredient.
 		if alloyData.ExtraIngredientID.Valid {
 			if extraNode, err := buildResultTreeRecursive(
 				alloyData.ExtraIngredientID.String, amountMB, percentages, visited, level+1, maxLevel,
@@ -97,7 +84,7 @@ func buildResultTreeRecursive(
 		processed = true
 
 	} else if alloyData.Type == "processed" && alloyID == "steel" {
-		// 2) If this is the processed steel, it is 100% pig_iron.
+		// Processed steel is 100% pig_iron.
 		node.Name = alloyData.Name
 		if pigNode, err := buildResultTreeRecursive(
 			"pig_iron", amountMB, percentages, visited, level+1, maxLevel,
@@ -107,11 +94,11 @@ func buildResultTreeRecursive(
 		processed = true
 	}
 
-	// 3) Standard case: alloys or raw_steel composed of ingredients by percentage.
+	// Standard case: alloys or raw_steel composed by percentage.
 	if !processed && alloyData.Type != "base" && len(recipeSource.Ingredients) > 0 {
 		node.Name = recipeSource.Name
 
-		// Get default percentages and merge in any user overrides.
+		// Merge default percentages with any overrides.
 		defaultPerc, _ := calculator.GetDefaultPercentages(idForIngredients)
 		if userPerc, found := percentages[idForIngredients]; found && defaultPerc != nil {
 			merged := make(map[string]float64)
@@ -123,13 +110,13 @@ func buildResultTreeRecursive(
 					merged[ing.IngredientID] = defaultPerc[ing.IngredientID]
 				}
 			}
-			// If the merged percentages are valid, use them.
+			// Use merged values when valid.
 			if valid, _ := calculator.ValidatePercentages(idForIngredients, merged); valid {
 				defaultPerc = merged
 			}
 		}
 
-		// If the final defaultPerc map is invalid, return an error.
+		// Fail if the final percentages are invalid.
 		if valid, err := calculator.ValidatePercentages(idForIngredients, defaultPerc); !valid {
 			return nil, fmt.Errorf("invalid percentages for %s: %v", idForIngredients, err)
 		}
@@ -147,7 +134,7 @@ func buildResultTreeRecursive(
 				node.Children = append(node.Children, childNode)
 			}
 		}
-		// Sort children alphabetically by Name to keep output stable.
+		// Sort children by name for stable output.
 		sort.Slice(node.Children, func(i, j int) bool {
 			return node.Children[i].Name < node.Children[j].Name
 		})
@@ -156,19 +143,14 @@ func buildResultTreeRecursive(
 	return node, nil
 }
 
-// lineInfo holds everything needed to render one ASCII‐tree line:
-//
-//   - PrefixParts: for each ancestor level, true=that ancestor was the last child, so we print spaces.
-//   - IsLast: is this node the last among its siblings (so we choose “└── ” vs. “├── ”).
-//   - Text: e.g. “Bismuth Bronze (250.00mB | 2.500Ing)”.
+// lineInfo holds everything needed to render one ASCII tree line.
 type lineInfo struct {
-	PrefixParts []bool // PrefixParts[i] == true ⇒ at depth i, ancestor was last ⇒ print spaces
+	PrefixParts []bool // true means ancestor was last at that depth
 	IsLast      bool   // Is this node the last child at its level?
-	Text        string // Node label, e.g. “Copper (221.25mB | 2.212Ing)”
+	Text        string // Node label, e.g. "Copper (221.25mB | 2.212Ing)"
 }
 
-// collectLines recursively walks nodes and appends lineInfo entries.
-// prefixParts is passed down so that each child inherits which ancestors were “last”.
+// collectLines walks nodes and appends lineInfo entries.
 func collectLines(nodes []*calculationNode, prefixParts []bool, out *[]lineInfo) {
 	for i, node := range nodes {
 		isLast := i == len(nodes)-1
@@ -184,8 +166,7 @@ func collectLines(nodes []*calculationNode, prefixParts []bool, out *[]lineInfo)
 	}
 }
 
-// formatHierarchy takes one or more root nodes and returns a flat slice of lineInfo
-// representing the entire forest. This can then be passed to RenderLines.
+// formatHierarchy flattens one or more roots into lineInfo entries.
 func formatHierarchy(roots []*calculationNode) []lineInfo {
 	var lines []lineInfo
 	if len(roots) == 0 {
@@ -195,7 +176,7 @@ func formatHierarchy(roots []*calculationNode) []lineInfo {
 		isLastRoot := idx == len(roots)-1
 		lineText := fmt.Sprintf("%s (%.2fmB | %.3fIng)", root.Name, root.AmountMB, root.AmountIngots)
 		lines = append(lines, lineInfo{
-			PrefixParts: []bool{isLastRoot}, // top‐level depth uses only one boolean
+			PrefixParts: []bool{isLastRoot}, // Top level uses a single boolean
 			IsLast:      isLastRoot,
 			Text:        lineText,
 		})

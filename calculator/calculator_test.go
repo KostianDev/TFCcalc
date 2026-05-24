@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-// TestMain sets up the shared DB connection for all tests.
+// TestMain sets up the shared repository for all tests.
 func TestMain(m *testing.M) {
 	mode := os.Getenv("TFC_REPO_MODE")
 	if mode == "mysql" {
@@ -72,7 +72,7 @@ func resolveRepoRelative(path string) (string, bool) {
 	return "", false
 }
 
-// floatMapEqual compares two maps[string]float64 within a tolerance.
+// floatMapEqual compares two maps within a tolerance.
 func floatMapEqual(a, b map[string]float64, eps float64) bool {
 	if len(a) != len(b) {
 		return false
@@ -136,7 +136,7 @@ func TestValidatePercentages_ValidAndInvalid(t *testing.T) {
 }
 
 func TestResolvePercentagesForAlloy_CustomAndDefaults(t *testing.T) {
-	// Case A: empty userPerc → defaults
+	// Case A: empty userPerc uses defaults.
 	gotA, errA := ResolvePercentagesForAlloy("brass", nil)
 	if errA != nil {
 		t.Fatalf("ResolvePercentagesForAlloy(empty) returned error: %v", errA)
@@ -146,7 +146,7 @@ func TestResolvePercentagesForAlloy_CustomAndDefaults(t *testing.T) {
 		t.Errorf("ResolvePercentagesForAlloy(empty) = %v, want %v", gotA, wantDefault)
 	}
 
-	// Case B: partial user map → sum 102 → invalid → defaults
+	// Case B: partial user map sums to 102, invalid, defaults used.
 	userB := map[string]float64{"copper": 92.0}
 	gotB, errB := ResolvePercentagesForAlloy("brass", userB)
 	if errB != nil {
@@ -156,7 +156,7 @@ func TestResolvePercentagesForAlloy_CustomAndDefaults(t *testing.T) {
 		t.Errorf("ResolvePercentagesForAlloy(partial) = %v, want %v", gotB, wantDefault)
 	}
 
-	// Case C: out of range → invalid → defaults
+	// Case C: out of range, invalid, defaults used.
 	userC := map[string]float64{"copper": 200.0, "zinc": 0.0}
 	gotC, errC := ResolvePercentagesForAlloy("brass", userC)
 	if errC != nil {
@@ -178,7 +178,7 @@ func TestSumMaterials(t *testing.T) {
 }
 
 func TestGetBaseMaterialBreakdown_SimpleAndNested(t *testing.T) {
-	// Base: "copper" → itself
+	// Base: "copper" resolves to itself.
 	baseRes, errBase := getBaseMaterialBreakdown("copper", 50.0, nil, 0)
 	if errBase != nil {
 		t.Fatalf("getBaseMaterialBreakdown(base) error: %v", errBase)
@@ -188,7 +188,7 @@ func TestGetBaseMaterialBreakdown_SimpleAndNested(t *testing.T) {
 		t.Errorf("getBaseMaterialBreakdown(copper) = %v, want %v", baseRes, wantBase)
 	}
 
-	// Alloy: "brass" 100mB → 90 copper, 10 zinc
+	// Alloy: "brass" 100mB is 90 copper, 10 zinc.
 	alloyRes, errAlloy := getBaseMaterialBreakdown("brass", 100.0, nil, 0)
 	if errAlloy != nil {
 		t.Fatalf("getBaseMaterialBreakdown(brass) error: %v", errAlloy)
@@ -199,8 +199,8 @@ func TestGetBaseMaterialBreakdown_SimpleAndNested(t *testing.T) {
 	}
 
 	// Nested: "black_steel" 100mB
-	// raw_black_steel breakdown: steel=60→pig_iron=60, nickel=20, black_bronze=20→copper=13,silver=3.5,gold=3.5
-	// totals: pig_iron=60, nickel=20, copper=13, silver=3.5, gold=3.5; extra pig_iron=100 → pig_iron=160
+	// raw_black_steel breakdown: steel=60 to pig_iron=60, nickel=20, black_bronze=20 to copper=13,silver=3.5,gold=3.5
+	// totals: pig_iron=60, nickel=20, copper=13, silver=3.5, gold=3.5; extra pig_iron=100 makes pig_iron=160
 	res, errNested := getBaseMaterialBreakdown("black_steel", 100.0, nil, 0)
 	if errNested != nil {
 		t.Fatalf("getBaseMaterialBreakdown(black_steel) error: %v", errNested)
@@ -218,7 +218,7 @@ func TestGetBaseMaterialBreakdown_SimpleAndNested(t *testing.T) {
 }
 
 func TestCalculateRequirements_Brass_And_BlackSteel(t *testing.T) {
-	// Brass, 100 Ingots → 100*100mB=10000mB → 9000 copper, 1000 zinc
+	// Brass, 100 Ingots is 10000mB, then 9000 copper and 1000 zinc.
 	mbMap, ingMap, err := CalculateRequirements("brass", 100.0, "Ingots", nil)
 	if err != nil {
 		t.Fatalf("CalculateRequirements(brass) error: %v", err)
@@ -233,8 +233,8 @@ func TestCalculateRequirements_Brass_And_BlackSteel(t *testing.T) {
 	}
 
 	// Black steel, 50mB
-	// raw_black_steel(50): steel=30→pig_iron=30, nickel=10, black_bronze=10→copper=6.5,silver=1.75,gold=1.75
-	// totals: pig_iron=30, nickel=10, copper=6.5, silver=1.75, gold=1.75; extra pig_iron=50→pig_iron=80
+	// raw_black_steel(50): steel=30 to pig_iron=30, nickel=10, black_bronze=10 to copper=6.5,silver=1.75,gold=1.75
+	// totals: pig_iron=30, nickel=10, copper=6.5, silver=1.75, gold=1.75; extra pig_iron=50 makes pig_iron=80
 	mbMap2, ingMap2, err2 := CalculateRequirements("black_steel", 50.0, "mB", nil)
 	if err2 != nil {
 		t.Fatalf("CalculateRequirements(black_steel) error: %v", err2)
@@ -261,9 +261,9 @@ func TestCalculateRequirements_Brass_And_BlackSteel(t *testing.T) {
 	}
 }
 
-// Test for invalid inputs to CalculateRequirements.
+// Test invalid inputs to CalculateRequirements.
 func TestCalculateRequirements_ErrorCases(t *testing.T) {
-	// Amount ≤ 0 should return an error.
+	// Amount <= 0 should return an error.
 	_, _, err1 := CalculateRequirements("brass", 0, "mB", nil)
 	if err1 == nil || err1.Error() != "amount must be positive" {
 		t.Errorf("CalculateRequirements(brass, 0, …) error = %v, want \"amount must be positive\"", err1)
@@ -336,9 +336,9 @@ func TestResolvePercentagesForAlloy_EmptyMap(t *testing.T) {
 	}
 }
 
-// Test that “steel” is handled inside getBaseMaterialBreakdown.
+// Test that "steel" is handled inside getBaseMaterialBreakdown.
 func TestGetBaseMaterialBreakdown_SteelInsideAlloy(t *testing.T) {
-	// raw_black_steel(100): steel=60→pig_iron=60, nickel=20, black_bronze=20→copper=13,silver=3.5,gold=3.5
+	// raw_black_steel(100): steel=60 to pig_iron=60, nickel=20, black_bronze=20 to copper=13,silver=3.5,gold=3.5
 	res, err := getBaseMaterialBreakdown("raw_black_steel", 100.0, nil, 0)
 	if err != nil {
 		t.Fatalf("getBaseMaterialBreakdown(raw_black_steel) returned error: %v", err)
@@ -355,21 +355,18 @@ func TestGetBaseMaterialBreakdown_SteelInsideAlloy(t *testing.T) {
 	}
 }
 
-// TestRandomValidatePercentages picks random percentage maps for "brass" and checks ValidatePercentages.
-// It ensures that any map drawn uniformly between 0–100 for each ingredient either
-// (a) passes exactly when it lies within [Min,Max] and sums ≈100, or
-// (b) fails otherwise.
+// TestRandomValidatePercentages samples maps for "brass" and checks ValidatePercentages.
 func TestRandomValidatePercentages(t *testing.T) {
 	rand.Seed(time.Now().UnixNano())
 	const iterations = 500
-	// Known ranges for "brass": copper ∈ [88,92], zinc ∈ [8,12]
+	// Known ranges for "brass": copper in [88,92], zinc in [8,12]
 	for i := 0; i < iterations; i++ {
 		cu := rand.Float64() * 100.0 // 0..100
-		zn := 100.0 - cu             // so they always sum exactly 100
+		zn := 100.0 - cu             // sums to 100
 		m := map[string]float64{"copper": cu, "zinc": zn}
 		ok, _ := ValidatePercentages("brass", m)
 
-		// The only way it should pass is if cu∈[88,92] and zn∈[8,12] (and they sum=100).
+		// It should pass only when cu in [88,92] and zn in [8,12].
 		inside := (cu >= 88.0 && cu <= 92.0) && (zn >= 8.0 && zn <= 12.0)
 		if ok != inside {
 			t.Errorf("iter %d: ValidatePercentages(brass, %#v) = %v, want %v", i, m, ok, inside)
@@ -377,14 +374,12 @@ func TestRandomValidatePercentages(t *testing.T) {
 	}
 }
 
-// TestRandomCalculateBreakdown picks a random positive amount (0 < amt ≤ 1000),
-// calls getBaseMaterialBreakdown("brass", amt, nil, 0), and then checks that
-// the returned base‐metal totals sum exactly to amt and that no negative values appear.
+// TestRandomCalculateBreakdown samples amounts and checks breakdown totals.
 func TestRandomCalculateBreakdown(t *testing.T) {
 	rand.Seed(time.Now().UnixNano())
 	const iterations = 200
 	for i := 0; i < iterations; i++ {
-		amt := rand.Float64()*999.0 + 1.0 // 1…1000 mB
+		amt := rand.Float64()*999.0 + 1.0 // 1..1000 mB
 		m, err := getBaseMaterialBreakdown("brass", amt, nil, 0)
 		if err != nil {
 			t.Fatalf("iteration %d: unexpected error: %v", i, err)
@@ -396,7 +391,7 @@ func TestRandomCalculateBreakdown(t *testing.T) {
 			}
 			sum += v
 		}
-		// Because brass always splits exactly 90%/10%, sum should equal amt (within tiny epsilon).
+		// Brass always splits 90/10, so sum should equal amt.
 		if diff := sum - amt; diff < -1e-6 || diff > 1e-6 {
 			t.Errorf("iteration %d: sum of breakdown = %f, want %f", i, sum, amt)
 		}
