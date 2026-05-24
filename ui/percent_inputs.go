@@ -25,6 +25,7 @@ type percentageControl struct {
 	lockToggle  *widget.Check
 	lockedValue float64
 	defaultVal  float64
+	userTouched bool
 }
 
 // createPercentageInputsForAlloy builds sliders for one alloy's ingredients.
@@ -62,6 +63,7 @@ func createPercentageInputsForAlloy(alloyID string) (fyne.CanvasObject, error) {
 			}
 			ctl.lockToggle.SetChecked(false)
 			ctl.slider.Enable()
+			ctl.userTouched = false
 			ctl.slider.Refresh()
 		}
 		if warning := alloyPercentageWarnings[alloyID]; warning != nil {
@@ -116,15 +118,20 @@ func createPercentageInputsForAlloy(alloyID string) (fyne.CanvasObject, error) {
 		}
 
 		slider.OnChanged = func(val float64) {
+			if !alloyPercentageUpdating[alloyID] {
+				ctl.userTouched = true
+			}
 			if alloyPercentageUpdating[alloyID] {
 				return
 			}
 			alloyPercentageUpdating[alloyID] = true
-			clamped := rebalanceAlloyPercentages(alloyID, ingredientID, val)
+			clamped, warningText := rebalanceAlloyPercentages(alloyID, ingredientID, val)
 			warning := alloyPercentageWarnings[alloyID]
 			if warning != nil {
-				if clamped {
-					warning.SetText("Adjusted to keep total at 100% within min/max bounds.")
+				if warningText != "" {
+					warning.SetText(warningText)
+				} else if clamped {
+					warning.SetText("Adjusted to keep total at 100% within limits.")
 				} else {
 					warning.SetText("")
 				}
@@ -142,25 +149,17 @@ func createPercentageInputsForAlloy(alloyID string) (fyne.CanvasObject, error) {
 	return vbox, nil
 }
 
-func rebalanceAlloyPercentages(alloyID, changedID string, requested float64) bool {
+func rebalanceAlloyPercentages(alloyID, changedID string, requested float64) (bool, string) {
 	controls := alloyPercentageControls[alloyID]
 	if len(controls) == 0 {
-		return false
+		return false, ""
 	}
 	changed, ok := controls[changedID]
 	if !ok {
-		return false
+		return false, ""
 	}
 
-	upperSum := 0.0
-	for id, ctl := range controls {
-		if id == changedID {
-			continue
-		}
-		if ctl.orderIndex < changed.orderIndex {
-			upperSum += ctl.slider.Value
-		}
-	}
+	requested = clamp(requested, changed.min, changed.max)
 
 	fixedSum := 0.0
 	adjustable := make([]*percentageControl, 0)
@@ -168,17 +167,12 @@ func rebalanceAlloyPercentages(alloyID, changedID string, requested float64) boo
 		if id == changedID {
 			continue
 		}
-		if ctl.orderIndex < changed.orderIndex {
-			continue
-		}
-		if ctl.lockToggle.Checked {
+		if ctl.lockToggle.Checked || ctl.userTouched {
 			fixedSum += ctl.slider.Value
 			continue
 		}
 		adjustable = append(adjustable, ctl)
 	}
-
-	fixedSum += upperSum
 
 	minOthers := fixedSum
 	maxOthers := fixedSum
@@ -201,7 +195,35 @@ func rebalanceAlloyPercentages(alloyID, changedID string, requested float64) boo
 	changed.slider.Refresh()
 
 	if len(adjustable) == 0 {
-		return clamped
+		return clamped, ""
+	}
+
+	minAdjustable := 0.0
+	maxAdjustable := 0.0
+	for _, ctl := range adjustable {
+		minAdjustable += ctl.min
+		maxAdjustable += ctl.max
+	}
+
+	totalMin := fixedSum + clampedValue + minAdjustable
+	totalMax := fixedSum + clampedValue + maxAdjustable
+	if totalMin > 100.0 {
+		for _, ctl := range adjustable {
+			ctl.slider.SetValue(ctl.min)
+			ctl.valueLabel.SetText(fmt.Sprintf("%.1f%%", ctl.min))
+			ctl.valueLabel.Refresh()
+			ctl.slider.Refresh()
+		}
+		return clamped, "Fixed sliders are above 100%. Adjust touched values to continue."
+	}
+	if totalMax < 100.0 {
+		for _, ctl := range adjustable {
+			ctl.slider.SetValue(ctl.max)
+			ctl.valueLabel.SetText(fmt.Sprintf("%.1f%%", ctl.max))
+			ctl.valueLabel.Refresh()
+			ctl.slider.Refresh()
+		}
+		return clamped, "Fixed sliders are below 100%. Adjust touched values to continue."
 	}
 
 	targetOthersSum := 100.0 - fixedSum - clampedValue
@@ -244,7 +266,7 @@ func rebalanceAlloyPercentages(alloyID, changedID string, requested float64) boo
 		ctl.slider.Refresh()
 	}
 
-	return clamped
+	return clamped, ""
 }
 
 func clamp(value, min, max float64) float64 {
