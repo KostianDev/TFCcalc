@@ -9,7 +9,7 @@ on:
       - '**'
 
 jobs:
-  test:
+  test-json:
     runs-on: ubuntu-latest
 
     steps:
@@ -24,5 +24,64 @@ jobs:
       - name: Install dependencies
         run: go mod tidy
 
-      - name: Run tests via Makefile
+      - name: Run tests via Makefile (JSON)
+        env:
+          TFC_REPO_MODE: json
+          TFC_ALLOYS_JSON: ./assets/alloys.json
+        run: make test
+
+  test-mysql:
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: password
+          MYSQL_ROOT_HOST: '%'
+          MYSQL_DATABASE: tfccalc_db
+        ports:
+          - 3405:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -ppassword"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Wait for MySQL to be ready
+        run: |
+          for i in {1..30}; do
+            mysql -h127.0.0.1 -P 3405 -uroot -ppassword -e "SELECT 1" && break
+            echo "Waiting for MySQL ($i)..."
+            sleep 2
+          done
+
+      - name: Load database schema
+        run: |
+          mysql -h127.0.0.1 -P 3405 -uroot -ppassword tfccalc_db < db/schema.sql
+
+      - name: Create app DB user
+        run: |
+          mysql -h127.0.0.1 -P 3405 -uroot -ppassword -e "
+            CREATE USER IF NOT EXISTS 'tfccalc_user'@'%' IDENTIFIED WITH mysql_native_password BY 'tfccalc_pass';
+            GRANT ALL PRIVILEGES ON tfccalc_db.* TO 'tfccalc_user'@'%';
+            FLUSH PRIVILEGES;
+          "
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: "1.24"
+
+      - name: Install dependencies
+        run: go mod tidy
+
+      - name: Run tests via Makefile (MySQL)
+        env:
+          TFC_REPO_MODE: mysql
+          TFC_MYSQL_DSN: tfccalc_user:tfccalc_pass@tcp(127.0.0.1:3405)/tfccalc_db
         run: make test

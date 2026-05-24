@@ -8,10 +8,28 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	jsonPath := filepath.Join("..", "assets", "alloys.json")
-	if err := InitJSON(jsonPath); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to initialize JSON repository: %v\n", err)
-		os.Exit(1)
+	mode := os.Getenv("TFC_REPO_MODE")
+	if mode == "mysql" {
+		dsn := os.Getenv("TFC_MYSQL_DSN")
+		if dsn == "" {
+			dsn = fmt.Sprintf(
+				"%s:%s@tcp(%s:%d)/%s?parseTime=true&charset=utf8mb4",
+				"tfccalc_user", "tfccalc_pass", "127.0.0.1", 3405, "tfccalc_db",
+			)
+		}
+		if err := InitMySQL(dsn); err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to initialize MySQL repository: %v\n", err)
+			os.Exit(1)
+		}
+	} else {
+		jsonPath := os.Getenv("TFC_ALLOYS_JSON")
+		if jsonPath == "" {
+			jsonPath = filepath.Join("..", "assets", "alloys.json")
+		}
+		if err := InitJSON(jsonPath); err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to initialize JSON repository: %v\n", err)
+			os.Exit(1)
+		}
 	}
 	os.Exit(m.Run())
 }
