@@ -63,17 +63,18 @@ INSERT INTO alloys (id, name, type, raw_form_id, extra_ingredient_id) VALUES
 
 -- Ingredients for simple alloys
 INSERT INTO ingredients (alloy_id, ingredient_id, min_pct, max_pct) VALUES
-  ('bismuth_bronze', 'copper', 85, 92),
-  ('bismuth_bronze', 'bismuth', 8, 15),
+  ('bismuth_bronze', 'copper', 50, 65),
+  ('bismuth_bronze', 'zinc', 20, 30),
+  ('bismuth_bronze', 'bismuth', 10, 20),
   ('black_bronze', 'copper', 50, 70),
-  ('black_bronze', 'zinc', 15, 25),
-  ('black_bronze', 'nickel', 15, 25),
+  ('black_bronze', 'silver', 10, 25),
+  ('black_bronze', 'gold', 10, 25),
   ('brass', 'copper', 88, 92),
   ('brass', 'zinc', 8, 12),
-  ('rose_gold', 'gold', 75, 80),
-  ('rose_gold', 'silver', 20, 25),
-  ('sterling_silver', 'silver', 92.5, 92.5),
-  ('sterling_silver', 'copper', 7.5, 7.5);
+  ('rose_gold', 'gold', 70, 85),
+  ('rose_gold', 'copper', 15, 30),
+  ('sterling_silver', 'silver', 60, 80),
+  ('sterling_silver', 'copper', 20, 40);
 
 -- Ingredients for processed steel
 INSERT INTO ingredients (alloy_id, ingredient_id, min_pct, max_pct) VALUES

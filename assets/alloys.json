@@ -47,8 +47,9 @@
       "name": "Bismuth Bronze",
       "type": "alloy",
       "ingredients": [
-        {"ingredient_id": "copper", "min_pct": 85, "max_pct": 92},
-        {"ingredient_id": "bismuth", "min_pct": 8, "max_pct": 15}
+        {"ingredient_id": "copper", "min_pct": 50, "max_pct": 65},
+        {"ingredient_id": "zinc", "min_pct": 20, "max_pct": 30},
+        {"ingredient_id": "bismuth", "min_pct": 10, "max_pct": 20}
       ]
     },
     {
@@ -57,8 +58,8 @@
       "type": "alloy",
       "ingredients": [
         {"ingredient_id": "copper", "min_pct": 50, "max_pct": 70},
-        {"ingredient_id": "zinc", "min_pct": 15, "max_pct": 25},
-        {"ingredient_id": "nickel", "min_pct": 15, "max_pct": 25}
+        {"ingredient_id": "silver", "min_pct": 10, "max_pct": 25},
+        {"ingredient_id": "gold", "min_pct": 10, "max_pct": 25}
       ]
     },
     {
@@ -75,8 +76,8 @@
       "name": "Rose Gold",
       "type": "alloy",
       "ingredients": [
-        {"ingredient_id": "gold", "min_pct": 75, "max_pct": 80},
-        {"ingredient_id": "silver", "min_pct": 20, "max_pct": 25}
+        {"ingredient_id": "gold", "min_pct": 70, "max_pct": 85},
+        {"ingredient_id": "copper", "min_pct": 15, "max_pct": 30}
       ]
     },
     {
@@ -84,8 +85,8 @@
       "name": "Sterling Silver",
       "type": "alloy",
       "ingredients": [
-        {"ingredient_id": "silver", "min_pct": 92.5, "max_pct": 92.5},
-        {"ingredient_id": "copper", "min_pct": 7.5, "max_pct": 7.5}
+        {"ingredient_id": "silver", "min_pct": 60, "max_pct": 80},
+        {"ingredient_id": "copper", "min_pct": 20, "max_pct": 40}
       ]
     },
     {

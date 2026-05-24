@@ -165,17 +165,18 @@ func TestGetBaseMaterialBreakdown_SimpleAndNested(t *testing.T) {
 	}
 
 	// Nested: "black_steel" 100mB
-	// raw_black_steel breakdown: steel=60→pig_iron=60, nickel=20, black_bronze=20→copper=12,zinc=4,nickel=4
-	// totals: pig_iron=60, nickel=24, copper=12, zinc=4; extra pig_iron=100 → pig_iron=160
+	// raw_black_steel breakdown: steel=60→pig_iron=60, nickel=20, black_bronze=20→copper=13,silver=3.5,gold=3.5
+	// totals: pig_iron=60, nickel=20, copper=13, silver=3.5, gold=3.5; extra pig_iron=100 → pig_iron=160
 	res, errNested := getBaseMaterialBreakdown("black_steel", 100.0, nil, 0)
 	if errNested != nil {
 		t.Fatalf("getBaseMaterialBreakdown(black_steel) error: %v", errNested)
 	}
 	wantNested := map[string]float64{
 		"pig_iron": 160.0,
-		"nickel":   24.0,
-		"copper":   12.0,
-		"zinc":     4.0,
+		"nickel":   20.0,
+		"copper":   13.0,
+		"silver":   3.5,
+		"gold":     3.5,
 	}
 	if !floatMapEqual(res, wantNested, 0.0001) {
 		t.Errorf("getBaseMaterialBreakdown(black_steel) = %v, want %v", res, wantNested)
@@ -198,23 +199,25 @@ func TestCalculateRequirements_Brass_And_BlackSteel(t *testing.T) {
 	}
 
 	// Black steel, 50mB
-	// raw_black_steel(50): steel=30→pig_iron=30, nickel=10, black_bronze=10→copper=6,zinc=2,nickel=2
-	// totals: pig_iron=30, nickel=12, copper=6, zinc=2; extra pig_iron=50→pig_iron=80
+	// raw_black_steel(50): steel=30→pig_iron=30, nickel=10, black_bronze=10→copper=6.5,silver=1.75,gold=1.75
+	// totals: pig_iron=30, nickel=10, copper=6.5, silver=1.75, gold=1.75; extra pig_iron=50→pig_iron=80
 	mbMap2, ingMap2, err2 := CalculateRequirements("black_steel", 50.0, "mB", nil)
 	if err2 != nil {
 		t.Fatalf("CalculateRequirements(black_steel) error: %v", err2)
 	}
 	wantMB2 := map[string]float64{
 		"pig_iron": 80.0,
-		"nickel":   12.0,
-		"copper":   6.0,
-		"zinc":     2.0,
+		"nickel":   10.0,
+		"copper":   6.5,
+		"silver":   1.75,
+		"gold":     1.75,
 	}
 	wantIng2 := map[string]float64{
 		"pig_iron": 0.80,
-		"nickel":   0.12,
-		"copper":   0.06,
-		"zinc":     0.02,
+		"nickel":   0.10,
+		"copper":   0.065,
+		"silver":   0.0175,
+		"gold":     0.0175,
 	}
 	if !floatMapEqual(mbMap2, wantMB2, 0.001) {
 		t.Errorf("CalculateRequirements(black_steel).MB = %v, want %v", mbMap2, wantMB2)
