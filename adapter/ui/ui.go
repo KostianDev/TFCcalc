@@ -10,6 +10,7 @@ import (
 	"tfccalc/domain"
 	uihelpers "tfccalc/ui/helpers"
 	"tfccalc/usecase/alloy"
+	forginguc "tfccalc/usecase/forging"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -266,11 +267,20 @@ func BuildUI(app fyne.App, svc *alloy.Service) fyne.Window {
 		rightSplit,
 	)
 
-	// Main split: left and right panels.
+	// Main split: left and right panels for Alloy tab.
 	mainSplit := container.NewHSplit(leftPanel, rightContent)
 	mainSplit.SetOffset(0.35)
 
-	win.SetContent(mainSplit)
+	// Build Anvil tab content and assemble tabs
+	anvilSvc := forginguc.NewService()
+	anvilTab := BuildAnvilTab(anvilSvc)
+
+	tabs := container.NewAppTabs(
+		container.NewTabItem("Alloy", mainSplit),
+		container.NewTabItem("Anvil", anvilTab),
+	)
+
+	win.SetContent(tabs)
 	win.SetPadded(true)
 	win.Resize(fyne.NewSize(1100, 700))
 
