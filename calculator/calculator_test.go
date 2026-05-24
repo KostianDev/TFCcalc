@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 	"tfccalc/data"
@@ -28,7 +29,12 @@ func TestMain(m *testing.M) {
 	} else {
 		jsonPath := os.Getenv("TFC_ALLOYS_JSON")
 		if jsonPath == "" {
-			jsonPath = "../assets/alloys.json"
+			cwd, err := os.Getwd()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to resolve working directory: %v\n", err)
+				os.Exit(1)
+			}
+			jsonPath = filepath.Join(cwd, "..", "assets", "alloys.json")
 		}
 		if err := data.InitJSON(jsonPath); err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to initialize JSON repository: %v\n", err)
@@ -304,12 +310,18 @@ func TestResolvePercentagesForAlloy_EmptyMap(t *testing.T) {
 
 // Test that “steel” is handled inside getBaseMaterialBreakdown.
 func TestGetBaseMaterialBreakdown_SteelInsideAlloy(t *testing.T) {
-	// raw_black_steel(100): steel=60→pig_iron=60, nickel=20, black_bronze=20→copper=12,zinc=4,nickel=4
+	// raw_black_steel(100): steel=60→pig_iron=60, nickel=20, black_bronze=20→copper=13,silver=3.5,gold=3.5
 	res, err := getBaseMaterialBreakdown("raw_black_steel", 100.0, nil, 0)
 	if err != nil {
 		t.Fatalf("getBaseMaterialBreakdown(raw_black_steel) returned error: %v", err)
 	}
-	want := map[string]float64{"pig_iron": 60.0, "nickel": 24.0, "copper": 12.0, "zinc": 4.0}
+	want := map[string]float64{
+		"pig_iron": 60.0,
+		"nickel":   20.0,
+		"copper":   13.0,
+		"silver":   3.5,
+		"gold":     3.5,
+	}
 	if !floatMapEqual(res, want, 0.0001) {
 		t.Errorf("getBaseMaterialBreakdown(raw_black_steel) = %v, want %v", res, want)
 	}
