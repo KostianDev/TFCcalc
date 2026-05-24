@@ -27,7 +27,7 @@ jobs:
       - name: Run tests via Makefile (JSON)
         env:
           TFC_REPO_MODE: json
-          TFC_ALLOYS_JSON: ./assets/alloys.json
+          TFC_ALLOYS_JSON: ${{ github.workspace }}/assets/alloys.json
         run: make test
 
   test-mysql:

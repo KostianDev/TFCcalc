@@ -35,6 +35,10 @@ func TestMain(m *testing.M) {
 				os.Exit(1)
 			}
 			jsonPath = filepath.Join(cwd, "..", "assets", "alloys.json")
+		} else if !filepath.IsAbs(jsonPath) {
+			if resolved, ok := resolveRepoRelative(jsonPath); ok {
+				jsonPath = resolved
+			}
 		}
 		if err := data.InitJSON(jsonPath); err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to initialize JSON repository: %v\n", err)
@@ -42,6 +46,30 @@ func TestMain(m *testing.M) {
 		}
 	}
 	os.Exit(m.Run())
+}
+
+func resolveRepoRelative(path string) (string, bool) {
+	if filepath.IsAbs(path) {
+		return path, true
+	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", false
+	}
+	// Walk up a few levels to locate the repo root.
+	probe := cwd
+	for i := 0; i < 6; i++ {
+		candidate := filepath.Join(probe, path)
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate, true
+		}
+		parent := filepath.Dir(probe)
+		if parent == probe {
+			break
+		}
+		probe = parent
+	}
+	return "", false
 }
 
 // floatMapEqual compares two maps[string]float64 within a tolerance.
