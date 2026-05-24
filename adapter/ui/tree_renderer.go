@@ -3,7 +3,7 @@ package adapterui
 import (
 	"image/color"
 
-	ui "tfccalc/ui"
+	uihelpers "tfccalc/ui/helpers"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -21,7 +21,7 @@ var palette = []color.Color{
 }
 
 // RenderLines returns a VBox that lays out each line as colored text segments.
-func RenderLines(lines []ui.LineInfo) *fyne.Container {
+func RenderLines(lines []uihelpers.LineInfo) *fyne.Container {
 	box := container.NewVBox()
 
 	for _, ln := range lines {

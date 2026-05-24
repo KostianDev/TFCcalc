@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"tfccalc/domain"
-	ui "tfccalc/ui"
+	uihelpers "tfccalc/ui/helpers"
 	"tfccalc/usecase/alloy"
 
 	"fyne.io/fyne/v2"
@@ -187,13 +187,13 @@ func BuildUI(app fyne.App, svc *alloy.Service) fyne.Window {
 		if mode == "Ingots" {
 			rootMB = amt * 100.0
 		}
-		rootNode, errTree := ui.BuildResultTreeRecursive(selected, rootMB, percMap, make(map[string]int), 0, 5, svc)
+		rootNode, errTree := uihelpers.BuildResultTreeRecursive(selected, rootMB, percMap, make(map[string]int), 0, 5, svc)
 		if errTree != nil {
 			statusLabel.SetText(fmt.Sprintf("Tree build error: %v", errTree))
 			hierarchyContainer.Objects = nil
 			hierarchyContainer.Refresh()
 		} else if rootNode != nil {
-			lines := ui.FormatHierarchy([]*ui.CalculationNode{rootNode})
+			lines := uihelpers.FormatHierarchy([]*uihelpers.CalculationNode{rootNode})
 			treeBox := RenderLines(lines)
 
 			hierarchyContainer.Objects = nil
