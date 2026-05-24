@@ -3,7 +3,7 @@ package ui
 import (
 	"fmt"
 	"sort"
-	"tfccalc/data"
+	"tfccalc/usecase/alloy"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -58,7 +58,7 @@ func InitSummaryTable() *widget.Table {
 }
 
 // UpdateSummaryData rebuilds summaryData from finalMB and refreshes the table.
-func UpdateSummaryData(finalMB map[string]float64, table *widget.Table) {
+func UpdateSummaryData(finalMB map[string]float64, table *widget.Table, svc *alloy.Service) {
 	// Start with just the header.
 	summaryData = [][]string{{"Material", "mB", "Ingots"}}
 
@@ -68,14 +68,14 @@ func UpdateSummaryData(finalMB map[string]float64, table *widget.Table) {
 		ids = append(ids, id)
 	}
 	sort.Slice(ids, func(i, j int) bool {
-		return data.GetAlloyNameByID(ids[i]) < data.GetAlloyNameByID(ids[j])
+		return svc.GetAlloyNameByID(ids[i]) < svc.GetAlloyNameByID(ids[j])
 	})
 
 	// Append each alloy row in sorted order.
 	for _, id := range ids {
 		mbVal := finalMB[id]
 		summaryData = append(summaryData, []string{
-			data.GetAlloyNameByID(id),
+			svc.GetAlloyNameByID(id),
 			fmt.Sprintf("%.2f", mbVal),
 			fmt.Sprintf("%.3f", mbVal/100.0),
 		})

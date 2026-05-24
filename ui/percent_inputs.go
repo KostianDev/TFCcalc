@@ -3,8 +3,8 @@ package ui
 import (
 	"fmt"
 	"math"
-	"tfccalc/calculator"
-	"tfccalc/data"
+	"tfccalc/domain"
+	"tfccalc/usecase/alloy"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -29,9 +29,9 @@ type percentageControl struct {
 }
 
 // createPercentageInputsForAlloy builds sliders for one alloy's ingredients.
-func createPercentageInputsForAlloy(alloyID string) (fyne.CanvasObject, error) {
-	alloy, ok := data.GetAlloyByID(alloyID)
-	if !ok || len(alloy.Ingredients) == 0 {
+func createPercentageInputsForAlloy(alloyID string, svc *alloy.Service) (fyne.CanvasObject, error) {
+	alloyData, ok := svc.GetAlloyByID(alloyID)
+	if !ok || len(alloyData.Ingredients) == 0 {
 		lbl := widget.NewLabel("  (No configurable ingredients)")
 		lbl.Wrapping = fyne.TextWrapWord
 		return lbl, nil
@@ -47,7 +47,7 @@ func createPercentageInputsForAlloy(alloyID string) (fyne.CanvasObject, error) {
 		alloyPercentageUpdating = make(map[string]bool)
 	}
 
-	defaultPerc, _ := calculator.GetDefaultPercentages(alloyID)
+	defaultPerc, _ := svc.GetDefaultPercentages(alloyID)
 
 	resetButton := widget.NewButton("Reset to Defaults", func() {
 		if defaultPerc == nil {
@@ -73,9 +73,9 @@ func createPercentageInputsForAlloy(alloyID string) (fyne.CanvasObject, error) {
 	})
 	vbox.Add(resetButton)
 
-	for idx, ing := range alloy.Ingredients {
+	for idx, ing := range alloyData.Ingredients {
 		ingredientID := ing.IngredientID
-		ingName := data.GetAlloyNameByID(ingredientID)
+		ingName := svc.GetAlloyNameByID(ingredientID)
 		label := widget.NewLabel(fmt.Sprintf("%s [%.0f-%.0f%%]:", ingName, ing.Min, ing.Max))
 		label.Wrapping = fyne.TextWrapWord
 
@@ -281,28 +281,28 @@ func clamp(value, min, max float64) float64 {
 
 // buildAccordionItemsRecursive walks the alloy-to-ingredients graph and appends
 // an AccordionItem for each alloy (or raw form) with configurable ingredients.
-func buildAccordionItemsRecursive(alloyID string, acc *widget.Accordion, visited map[string]bool) {
+func buildAccordionItemsRecursive(alloyID string, acc *widget.Accordion, visited map[string]bool, svc *alloy.Service) {
 	if visited[alloyID] {
 		return
 	}
 	visited[alloyID] = true
 
-	alloy, ok := data.GetAlloyByID(alloyID)
+	alloyData, ok := svc.GetAlloyByID(alloyID)
 	if !ok {
 		return
 	}
 	idForInputs := alloyID
-	if alloy.Type == "final_steel" {
-		idForInputs = alloy.RawFormID.String
+	if alloyData.Type == domain.AlloyTypeFinalSteel && alloyData.RawFormID != nil {
+		idForInputs = *alloyData.RawFormID
 	}
 
-	currentAlloy, ok := data.GetAlloyByID(idForInputs)
+	currentAlloy, ok := svc.GetAlloyByID(idForInputs)
 	if !ok {
 		return
 	}
 	// If this alloy/form has ingredients, add a "Configure: <Name>" item.
 	if len(currentAlloy.Ingredients) > 0 {
-		content, err := createPercentageInputsForAlloy(idForInputs)
+		content, err := createPercentageInputsForAlloy(idForInputs, svc)
 		if err != nil {
 			lbl := widget.NewLabel(fmt.Sprintf("Error loading inputs: %v", err))
 			lbl.Wrapping = fyne.TextWrapWord
@@ -313,20 +313,20 @@ func buildAccordionItemsRecursive(alloyID string, acc *widget.Accordion, visited
 
 		// Recurse into ingredients that are alloys or raw_steel.
 		for _, ing := range currentAlloy.Ingredients {
-			ingAlloy, ok2 := data.GetAlloyByID(ing.IngredientID)
+			ingAlloy, ok2 := svc.GetAlloyByID(ing.IngredientID)
 			if !ok2 {
 				continue
 			}
 			nextID := ing.IngredientID
-			if ingAlloy.Type == "final_steel" {
-				nextID = ingAlloy.RawFormID.String
+			if ingAlloy.Type == domain.AlloyTypeFinalSteel && ingAlloy.RawFormID != nil {
+				nextID = *ingAlloy.RawFormID
 			}
-			nextAlloy, ok3 := data.GetAlloyByID(nextID)
-			if ok3 && (nextAlloy.Type == "alloy" || nextAlloy.Type == "raw_steel") && len(nextAlloy.Ingredients) > 0 {
-				buildAccordionItemsRecursive(nextID, acc, visited)
+			nextAlloy, ok3 := svc.GetAlloyByID(nextID)
+			if ok3 && (nextAlloy.Type == domain.AlloyTypeAlloy || nextAlloy.Type == domain.AlloyTypeRawSteel) && len(nextAlloy.Ingredients) > 0 {
+				buildAccordionItemsRecursive(nextID, acc, visited, svc)
 			}
 		}
-	} else if currentAlloy.Type == "alloy" || currentAlloy.Type == "raw_steel" {
+	} else if currentAlloy.Type == domain.AlloyTypeAlloy || currentAlloy.Type == domain.AlloyTypeRawSteel {
 		// If it is a leaf alloy, still show a "Configure: <Name> (No ingredients)" label.
 		lbl := widget.NewLabel(" (No configurable ingredients)")
 		lbl.Wrapping = fyne.TextWrapWord

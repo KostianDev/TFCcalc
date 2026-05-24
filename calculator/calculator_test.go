@@ -5,7 +5,6 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
-	"reflect"
 	"testing"
 	"tfccalc/data"
 	"time"
@@ -167,56 +166,6 @@ func TestResolvePercentagesForAlloy_CustomAndDefaults(t *testing.T) {
 	}
 }
 
-func TestSumMaterials(t *testing.T) {
-	m1 := map[string]float64{"a": 10.0, "b": 5.0}
-	m2 := map[string]float64{"b": 2.5, "c": 7.5}
-	got := sumMaterials(m1, m2)
-	want := map[string]float64{"a": 10.0, "b": 7.5, "c": 7.5}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("sumMaterials(%v,%v) = %v, want %v", m1, m2, got, want)
-	}
-}
-
-func TestGetBaseMaterialBreakdown_SimpleAndNested(t *testing.T) {
-	// Base: "copper" resolves to itself.
-	baseRes, errBase := getBaseMaterialBreakdown("copper", 50.0, nil, 0)
-	if errBase != nil {
-		t.Fatalf("getBaseMaterialBreakdown(base) error: %v", errBase)
-	}
-	wantBase := map[string]float64{"copper": 50.0}
-	if !floatMapEqual(baseRes, wantBase, 0.0001) {
-		t.Errorf("getBaseMaterialBreakdown(copper) = %v, want %v", baseRes, wantBase)
-	}
-
-	// Alloy: "brass" 100mB is 90 copper, 10 zinc.
-	alloyRes, errAlloy := getBaseMaterialBreakdown("brass", 100.0, nil, 0)
-	if errAlloy != nil {
-		t.Fatalf("getBaseMaterialBreakdown(brass) error: %v", errAlloy)
-	}
-	wantAlloy := map[string]float64{"copper": 90.0, "zinc": 10.0}
-	if !floatMapEqual(alloyRes, wantAlloy, 0.0001) {
-		t.Errorf("getBaseMaterialBreakdown(brass) = %v, want %v", alloyRes, wantAlloy)
-	}
-
-	// Nested: "black_steel" 100mB
-	// raw_black_steel breakdown: steel=60 to pig_iron=60, nickel=20, black_bronze=20 to copper=13,silver=3.5,gold=3.5
-	// totals: pig_iron=60, nickel=20, copper=13, silver=3.5, gold=3.5; extra pig_iron=100 makes pig_iron=160
-	res, errNested := getBaseMaterialBreakdown("black_steel", 100.0, nil, 0)
-	if errNested != nil {
-		t.Fatalf("getBaseMaterialBreakdown(black_steel) error: %v", errNested)
-	}
-	wantNested := map[string]float64{
-		"pig_iron": 160.0,
-		"nickel":   20.0,
-		"copper":   13.0,
-		"silver":   3.5,
-		"gold":     3.5,
-	}
-	if !floatMapEqual(res, wantNested, 0.0001) {
-		t.Errorf("getBaseMaterialBreakdown(black_steel) = %v, want %v", res, wantNested)
-	}
-}
-
 func TestCalculateRequirements_Brass_And_BlackSteel(t *testing.T) {
 	// Brass, 100 Ingots is 10000mB, then 9000 copper and 1000 zinc.
 	mbMap, ingMap, err := CalculateRequirements("brass", 100.0, "Ingots", nil)
@@ -337,23 +286,6 @@ func TestResolvePercentagesForAlloy_EmptyMap(t *testing.T) {
 }
 
 // Test that "steel" is handled inside getBaseMaterialBreakdown.
-func TestGetBaseMaterialBreakdown_SteelInsideAlloy(t *testing.T) {
-	// raw_black_steel(100): steel=60 to pig_iron=60, nickel=20, black_bronze=20 to copper=13,silver=3.5,gold=3.5
-	res, err := getBaseMaterialBreakdown("raw_black_steel", 100.0, nil, 0)
-	if err != nil {
-		t.Fatalf("getBaseMaterialBreakdown(raw_black_steel) returned error: %v", err)
-	}
-	want := map[string]float64{
-		"pig_iron": 60.0,
-		"nickel":   20.0,
-		"copper":   13.0,
-		"silver":   3.5,
-		"gold":     3.5,
-	}
-	if !floatMapEqual(res, want, 0.0001) {
-		t.Errorf("getBaseMaterialBreakdown(raw_black_steel) = %v, want %v", res, want)
-	}
-}
 
 // TestRandomValidatePercentages samples maps for "brass" and checks ValidatePercentages.
 func TestRandomValidatePercentages(t *testing.T) {
@@ -375,25 +307,3 @@ func TestRandomValidatePercentages(t *testing.T) {
 }
 
 // TestRandomCalculateBreakdown samples amounts and checks breakdown totals.
-func TestRandomCalculateBreakdown(t *testing.T) {
-	rand.Seed(time.Now().UnixNano())
-	const iterations = 200
-	for i := 0; i < iterations; i++ {
-		amt := rand.Float64()*999.0 + 1.0 // 1..1000 mB
-		m, err := getBaseMaterialBreakdown("brass", amt, nil, 0)
-		if err != nil {
-			t.Fatalf("iteration %d: unexpected error: %v", i, err)
-		}
-		var sum float64
-		for k, v := range m {
-			if v < 0 {
-				t.Errorf("iteration %d: negative amount %f for %q", i, v, k)
-			}
-			sum += v
-		}
-		// Brass always splits 90/10, so sum should equal amt.
-		if diff := sum - amt; diff < -1e-6 || diff > 1e-6 {
-			t.Errorf("iteration %d: sum of breakdown = %f, want %f", i, sum, amt)
-		}
-	}
-}

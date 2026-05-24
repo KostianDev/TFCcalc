@@ -7,8 +7,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"tfccalc/calculator"
-	"tfccalc/data"
+	"tfccalc/domain"
+	"tfccalc/usecase/alloy"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -17,10 +17,11 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-// BuildUI wires the main window: inputs on the left, results on the right.
-
 // BuildUI creates and returns the main window of the application.
-func BuildUI(app fyne.App) fyne.Window {
+func BuildUI(app fyne.App, svc *alloy.Service) fyne.Window {
+	if svc == nil {
+		log.Fatal("alloy service is required")
+	}
 	// Predefined color palette: must match the one in tree_renderer.go.
 	palette := []color.Color{
 		color.RGBA{R: 255, G: 102, B: 102, A: 255}, // Light Red
@@ -44,8 +45,8 @@ func BuildUI(app fyne.App) fyne.Window {
 	// Initialize alloyNames and alloyIDs for the dropdown.
 	alloyNames = []string{}
 	alloyIDs = make(map[string]string)
-	for id, alloyData := range data.GetAllAlloys() {
-		if alloyData.Type == "alloy" || alloyData.Type == "final_steel" {
+	for id, alloyData := range svc.GetAllAlloys() {
+		if alloyData.Type == domain.AlloyTypeAlloy || alloyData.Type == domain.AlloyTypeFinalSteel {
 			alloyNames = append(alloyNames, alloyData.Name)
 			alloyIDs[alloyData.Name] = id
 		}
@@ -68,10 +69,12 @@ func BuildUI(app fyne.App) fyne.Window {
 		// Build accordion items, starting from the raw form for final_steel.
 		visited := make(map[string]bool)
 		startID := currentAlloyID
-		if alloy, ok := data.GetAlloyByID(currentAlloyID); ok && alloy.Type == "final_steel" {
-			startID = alloy.RawFormID.String
+		if alloyData, ok := svc.GetAlloyByID(currentAlloyID); ok && alloyData.Type == domain.AlloyTypeFinalSteel {
+			if alloyData.RawFormID != nil {
+				startID = *alloyData.RawFormID
+			}
 		}
-		buildAccordionItemsRecursive(startID, percentageAccordion, visited)
+		buildAccordionItemsRecursive(startID, percentageAccordion, visited, svc)
 		percentageAccordion.Refresh()
 		if len(percentageAccordion.Items) > 0 {
 			percentageAccordion.Open(0)
@@ -149,18 +152,18 @@ func BuildUI(app fyne.App) fyne.Window {
 		userPercs := make(map[string]map[string]float64)
 		var validationErrors []string
 		for alloyID, controlMap := range alloyPercentageControls {
-			alloyInfo, _ := data.GetAlloyByID(alloyID)
+			alloyInfo, _ := svc.GetAlloyByID(alloyID)
 			finalPerc := make(map[string]float64)
 			for ingID, ctl := range controlMap {
 				finalPerc[ingID] = ctl.slider.Value
 			}
 			if len(alloyInfo.Ingredients) > 0 {
-				valid, errv := calculator.ValidatePercentages(alloyID, finalPerc)
+				valid, errv := svc.ValidatePercentages(alloyID, finalPerc)
 				if !valid {
 					validationErrors = append(
 						validationErrors,
 						fmt.Sprintf("Error in %% for %s: %v",
-							data.GetAlloyNameByID(alloyID),
+							svc.GetAlloyNameByID(alloyID),
 							errv,
 						),
 					)
@@ -178,7 +181,7 @@ func BuildUI(app fyne.App) fyne.Window {
 		if len(userPercs) > 0 {
 			percMap = userPercs
 		}
-		finalMB, _, errCalc := calculator.CalculateRequirements(selected, amt, mode, percMap)
+		finalMB, _, errCalc := svc.CalculateRequirements(selected, amt, mode, percMap)
 		if errCalc != nil {
 			statusLabel.SetText(fmt.Sprintf("Calculation error:\n%v", errCalc))
 			hierarchyContainer.Objects = nil
@@ -193,7 +196,7 @@ func BuildUI(app fyne.App) fyne.Window {
 		if mode == "Ingots" {
 			rootMB = amt * 100.0
 		}
-		rootNode, errTree := buildResultTreeRecursive(selected, rootMB, percMap, make(map[string]int), 0, 5)
+		rootNode, errTree := buildResultTreeRecursive(selected, rootMB, percMap, make(map[string]int), 0, 5, svc)
 		if errTree != nil {
 			statusLabel.SetText(fmt.Sprintf("Tree build error: %v", errTree))
 			hierarchyContainer.Objects = nil
@@ -236,11 +239,11 @@ func BuildUI(app fyne.App) fyne.Window {
 		}
 
 		statusLabel.SetText(fmt.Sprintf("Calculation result for %s %.2f %s:",
-			data.GetAlloyNameByID(selected), amt, mode,
+			svc.GetAlloyNameByID(selected), amt, mode,
 		))
 
 		// Update summary table.
-		UpdateSummaryData(finalMB, summaryTable)
+		UpdateSummaryData(finalMB, summaryTable, svc)
 	})
 
 	// Left panel: inputs and controls.

@@ -55,3 +55,8 @@ func InitJSON(path string) error {
 	})
 	return err
 }
+
+// Repository returns the initialized repository instance.
+func Repository() domain.AlloyRepository {
+	return repo
+}

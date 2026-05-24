@@ -8,6 +8,7 @@ import (
 
 	"tfccalc/data"
 	"tfccalc/ui"
+	"tfccalc/usecase/alloy"
 )
 
 func main() {
@@ -24,8 +25,13 @@ func main() {
 			log.Fatalf("Failed to initialize MySQL repository: %v", err)
 		}
 	}
+	repo := data.Repository()
+	if repo == nil {
+		log.Fatal("Repository not initialized")
+	}
+	alloyService := alloy.NewService(repo)
 
 	myApp := app.New()
-	myWindow := ui.BuildUI(myApp)
+	myWindow := ui.BuildUI(myApp, alloyService)
 	myWindow.ShowAndRun()
 }

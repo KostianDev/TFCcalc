@@ -3,8 +3,8 @@ package ui
 import (
 	"fmt"
 	"sort"
-	"tfccalc/calculator"
-	"tfccalc/data"
+	"tfccalc/domain"
+	"tfccalc/usecase/alloy"
 )
 
 // Tree formatting helpers without UI dependencies.
@@ -27,6 +27,7 @@ func buildResultTreeRecursive(
 	percentages map[string]map[string]float64,
 	visited map[string]int,
 	level, maxLevel int,
+	svc *alloy.Service,
 ) (*calculationNode, error) {
 	if level > maxLevel {
 		return nil, nil
@@ -36,7 +37,7 @@ func buildResultTreeRecursive(
 	nodeUID := fmt.Sprintf("%s_lvl%d_%d", alloyID, level, visited[alloyID])
 	visited[alloyID]++
 
-	alloyData, ok := data.GetAlloyByID(alloyID)
+	alloyData, ok := svc.GetAlloyByID(alloyID)
 	if !ok {
 		return nil, fmt.Errorf("unknown alloy: %s", alloyID)
 	}
@@ -48,7 +49,7 @@ func buildResultTreeRecursive(
 		Name:         alloyData.Name,
 		AmountMB:     amountMB,
 		AmountIngots: amountMB / 100.0,
-		IsBaseMetal:  alloyData.Type == "base",
+		IsBaseMetal:  alloyData.Type == domain.AlloyTypeBase,
 	}
 
 	idForIngredients := alloyID
@@ -56,9 +57,11 @@ func buildResultTreeRecursive(
 	processed := false
 
 	// For final_steel, include raw form and extra ingredient.
-	if alloyData.Type == "final_steel" {
-		idForIngredients = alloyData.RawFormID.String
-		recipeSource, ok = data.GetAlloyByID(idForIngredients)
+	if alloyData.Type == domain.AlloyTypeFinalSteel {
+		if alloyData.RawFormID != nil {
+			idForIngredients = *alloyData.RawFormID
+		}
+		recipeSource, ok = svc.GetAlloyByID(idForIngredients)
 		if !ok {
 			return nil, fmt.Errorf("raw_form %s not found", idForIngredients)
 		}
@@ -66,28 +69,28 @@ func buildResultTreeRecursive(
 		node.Name = alloyData.Name
 
 		// Recurse into the raw form.
-		if alloyData.RawFormID.Valid {
+		if alloyData.RawFormID != nil {
 			if rawNode, err := buildResultTreeRecursive(
-				idForIngredients, amountMB, percentages, visited, level+1, maxLevel,
+				idForIngredients, amountMB, percentages, visited, level+1, maxLevel, svc,
 			); err == nil && rawNode != nil {
 				node.Children = append(node.Children, rawNode)
 			}
 		}
 		// Recurse into extra ingredient.
-		if alloyData.ExtraIngredientID.Valid {
+		if alloyData.ExtraIngredientID != nil {
 			if extraNode, err := buildResultTreeRecursive(
-				alloyData.ExtraIngredientID.String, amountMB, percentages, visited, level+1, maxLevel,
+				*alloyData.ExtraIngredientID, amountMB, percentages, visited, level+1, maxLevel, svc,
 			); err == nil && extraNode != nil {
 				node.Children = append(node.Children, extraNode)
 			}
 		}
 		processed = true
 
-	} else if alloyData.Type == "processed" && alloyID == "steel" {
+	} else if alloyData.Type == domain.AlloyTypeProcessed && alloyID == "steel" {
 		// Processed steel is 100% pig_iron.
 		node.Name = alloyData.Name
 		if pigNode, err := buildResultTreeRecursive(
-			"pig_iron", amountMB, percentages, visited, level+1, maxLevel,
+			"pig_iron", amountMB, percentages, visited, level+1, maxLevel, svc,
 		); err == nil && pigNode != nil {
 			node.Children = append(node.Children, pigNode)
 		}
@@ -95,11 +98,11 @@ func buildResultTreeRecursive(
 	}
 
 	// Standard case: alloys or raw_steel composed by percentage.
-	if !processed && alloyData.Type != "base" && len(recipeSource.Ingredients) > 0 {
+	if !processed && alloyData.Type != domain.AlloyTypeBase && len(recipeSource.Ingredients) > 0 {
 		node.Name = recipeSource.Name
 
 		// Merge default percentages with any overrides.
-		defaultPerc, _ := calculator.GetDefaultPercentages(idForIngredients)
+		defaultPerc, _ := svc.GetDefaultPercentages(idForIngredients)
 		if userPerc, found := percentages[idForIngredients]; found && defaultPerc != nil {
 			merged := make(map[string]float64)
 			for k, v := range userPerc {
@@ -111,13 +114,13 @@ func buildResultTreeRecursive(
 				}
 			}
 			// Use merged values when valid.
-			if valid, _ := calculator.ValidatePercentages(idForIngredients, merged); valid {
+			if valid, _ := svc.ValidatePercentages(idForIngredients, merged); valid {
 				defaultPerc = merged
 			}
 		}
 
 		// Fail if the final percentages are invalid.
-		if valid, err := calculator.ValidatePercentages(idForIngredients, defaultPerc); !valid {
+		if valid, err := svc.ValidatePercentages(idForIngredients, defaultPerc); !valid {
 			return nil, fmt.Errorf("invalid percentages for %s: %v", idForIngredients, err)
 		}
 
@@ -129,7 +132,7 @@ func buildResultTreeRecursive(
 				continue
 			}
 			if childNode, err := buildResultTreeRecursive(
-				ing.IngredientID, childMB, percentages, visited, level+1, maxLevel,
+				ing.IngredientID, childMB, percentages, visited, level+1, maxLevel, svc,
 			); err == nil && childNode != nil {
 				node.Children = append(node.Children, childNode)
 			}
