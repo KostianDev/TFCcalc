@@ -8,7 +8,7 @@ services:
       MYSQL_USER: tfccalc_user
       MYSQL_PASSWORD: tfccalc_pass
     ports:
-      - "3306:3306"
+      - "3405:3306"
     volumes:
       - tfccalc-mysql-data:/var/lib/mysql
       - ./db/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro

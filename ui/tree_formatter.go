@@ -171,7 +171,7 @@ type lineInfo struct {
 // prefixParts is passed down so that each child inherits which ancestors were “last”.
 func collectLines(nodes []*calculationNode, prefixParts []bool, out *[]lineInfo) {
 	for i, node := range nodes {
-		isLast := (i == len(nodes)-1)
+		isLast := i == len(nodes)-1
 		lineText := fmt.Sprintf("%s (%.2fmB | %.3fIng)", node.Name, node.AmountMB, node.AmountIngots)
 		*out = append(*out, lineInfo{
 			PrefixParts: append(append([]bool{}, prefixParts...), isLast),
@@ -192,7 +192,7 @@ func formatHierarchy(roots []*calculationNode) []lineInfo {
 		return lines
 	}
 	for idx, root := range roots {
-		isLastRoot := (idx == len(roots)-1)
+		isLastRoot := idx == len(roots)-1
 		lineText := fmt.Sprintf("%s (%.2fmB | %.3fIng)", root.Name, root.AmountMB, root.AmountIngots)
 		lines = append(lines, lineInfo{
 			PrefixParts: []bool{isLastRoot}, // top‐level depth uses only one boolean

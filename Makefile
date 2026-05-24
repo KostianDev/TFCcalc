@@ -15,13 +15,8 @@ all: db-up test build run
 
 # Start MySQL only if not already running, then wait a fixed time for initialization
 db-up:
-	@running=$$(docker-compose ps -q mysql | xargs docker inspect -f '{{.State.Running}}'); \
-	if [ "$$running" != "true" ]; then \
-		echo "Starting MySQL container..."; \
-		docker-compose up -d; \
-	else \
-		echo "MySQL container already running"; \
-	fi
+	@echo "Bringing MySQL container up (if not already)..."
+	@docker-compose up -d mysql
 ifeq ($(OS),Windows_NT)
 	@echo "Waiting 5 seconds for MySQL to initialize (Windows)..."
 	@powershell -Command "Start-Sleep -Seconds 5"
