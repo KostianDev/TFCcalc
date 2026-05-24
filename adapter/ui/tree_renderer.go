@@ -1,14 +1,14 @@
-package ui
+package adapterui
 
 import (
 	"image/color"
+
+	ui "tfccalc/ui"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 )
-
-// Render lineInfo into colored monospace text segments.
 
 // palette is the set of colors to cycle through for different depths.
 var palette = []color.Color{
@@ -21,7 +21,7 @@ var palette = []color.Color{
 }
 
 // RenderLines returns a VBox that lays out each line as colored text segments.
-func RenderLines(lines []lineInfo) *fyne.Container {
+func RenderLines(lines []ui.LineInfo) *fyne.Container {
 	box := container.NewVBox()
 
 	for _, ln := range lines {

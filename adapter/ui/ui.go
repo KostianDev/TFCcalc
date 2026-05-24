@@ -1,35 +1,26 @@
-package ui
+package adapterui
 
 import (
 	"fmt"
-	"image/color"
 	"log"
 	"sort"
 	"strconv"
 	"strings"
+
 	"tfccalc/domain"
+	ui "tfccalc/ui"
 	"tfccalc/usecase/alloy"
 
 	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/data/validation"
 	"fyne.io/fyne/v2/widget"
 )
 
-// BuildUI creates and returns the main window of the application.
+// BuildUI creates and returns the main window of the application using Fyne.
 func BuildUI(app fyne.App, svc *alloy.Service) fyne.Window {
 	if svc == nil {
 		log.Fatal("alloy service is required")
-	}
-	// Predefined color palette: must match the one in tree_renderer.go.
-	palette := []color.Color{
-		color.RGBA{R: 255, G: 102, B: 102, A: 255}, // Light Red
-		color.RGBA{R: 102, G: 255, B: 102, A: 255}, // Light Green
-		color.RGBA{R: 102, G: 178, B: 255, A: 255}, // Light Blue
-		color.RGBA{R: 255, G: 255, B: 102, A: 255}, // Light Yellow
-		color.RGBA{R: 255, G: 153, B: 255, A: 255}, // Light Pink
-		color.RGBA{R: 153, G: 255, B: 255, A: 255}, // Light Cyan
 	}
 
 	// Load icon if available.
@@ -196,45 +187,17 @@ func BuildUI(app fyne.App, svc *alloy.Service) fyne.Window {
 		if mode == "Ingots" {
 			rootMB = amt * 100.0
 		}
-		rootNode, errTree := buildResultTreeRecursive(selected, rootMB, percMap, make(map[string]int), 0, 5, svc)
+		rootNode, errTree := ui.BuildResultTreeRecursive(selected, rootMB, percMap, make(map[string]int), 0, 5, svc)
 		if errTree != nil {
 			statusLabel.SetText(fmt.Sprintf("Tree build error: %v", errTree))
 			hierarchyContainer.Objects = nil
 			hierarchyContainer.Refresh()
 		} else if rootNode != nil {
-			lines := formatHierarchy([]*calculationNode{rootNode})
+			lines := ui.FormatHierarchy([]*ui.CalculationNode{rootNode})
+			treeBox := RenderLines(lines)
 
 			hierarchyContainer.Objects = nil
-			for _, ln := range lines {
-				var segments []fyne.CanvasObject
-				depth := len(ln.PrefixParts) - 1
-				// Draw ancestor bars/spaces.
-				for lvl := 0; lvl < depth; lvl++ {
-					if ln.PrefixParts[lvl] {
-						txt := canvas.NewText("    ", color.White)
-						txt.TextStyle = fyne.TextStyle{Monospace: true}
-						segments = append(segments, txt)
-					} else {
-						txt := canvas.NewText("│   ", palette[lvl%len(palette)])
-						txt.TextStyle = fyne.TextStyle{Monospace: true}
-						segments = append(segments, txt)
-					}
-				}
-				// Draw branch symbol.
-				branchSymbol := "├── "
-				if ln.IsLast {
-					branchSymbol = "└── "
-				}
-				brText := canvas.NewText(branchSymbol, palette[depth%len(palette)])
-				brText.TextStyle = fyne.TextStyle{Monospace: true}
-				segments = append(segments, brText)
-				// Draw node text.
-				nodeTxt := canvas.NewText(ln.Text, palette[depth%len(palette)])
-				nodeTxt.TextStyle = fyne.TextStyle{Monospace: true}
-				segments = append(segments, nodeTxt)
-
-				hierarchyContainer.Add(container.NewHBox(segments...))
-			}
+			hierarchyContainer.Objects = treeBox.Objects
 			hierarchyContainer.Refresh()
 		}
 

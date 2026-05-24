@@ -1,8 +1,9 @@
-package ui
+package adapterui
 
 import (
 	"fmt"
 	"math"
+
 	"tfccalc/domain"
 	"tfccalc/usecase/alloy"
 

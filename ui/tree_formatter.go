@@ -9,26 +9,27 @@ import (
 
 // Tree formatting helpers without UI dependencies.
 
-// calculationNode represents one node in the ingredient tree.
-type calculationNode struct {
+// CalculationNode represents one node in the ingredient tree and is exported
+// so adapters can inspect or traverse the generated tree when needed.
+type CalculationNode struct {
 	ID           string             // Unique ID: "<alloyID>_lvl<level>_<counter>"
 	AlloyID      string             // Alloy/material ID
 	Name         string             // Human-readable name
 	AmountMB     float64            // Amount in milli-buckets
 	AmountIngots float64            // Amount in ingots (MB / 100)
 	IsBaseMetal  bool               // True if this node is a base metal
-	Children     []*calculationNode // Child nodes
+	Children     []*CalculationNode // Child nodes
 }
 
-// buildResultTreeRecursive builds the calculation tree for a given alloy.
-func buildResultTreeRecursive(
+// BuildResultTreeRecursive builds the calculation tree for a given alloy.
+func BuildResultTreeRecursive(
 	alloyID string,
 	amountMB float64,
 	percentages map[string]map[string]float64,
 	visited map[string]int,
 	level, maxLevel int,
 	svc *alloy.Service,
-) (*calculationNode, error) {
+) (*CalculationNode, error) {
 	if level > maxLevel {
 		return nil, nil
 	}
@@ -43,7 +44,7 @@ func buildResultTreeRecursive(
 	}
 
 	// Create the node for this alloy/material.
-	node := &calculationNode{
+	node := &CalculationNode{
 		ID:           nodeUID,
 		AlloyID:      alloyID,
 		Name:         alloyData.Name,
@@ -70,7 +71,7 @@ func buildResultTreeRecursive(
 
 		// Recurse into the raw form.
 		if alloyData.RawFormID != nil {
-			if rawNode, err := buildResultTreeRecursive(
+			if rawNode, err := BuildResultTreeRecursive(
 				idForIngredients, amountMB, percentages, visited, level+1, maxLevel, svc,
 			); err == nil && rawNode != nil {
 				node.Children = append(node.Children, rawNode)
@@ -78,7 +79,7 @@ func buildResultTreeRecursive(
 		}
 		// Recurse into extra ingredient.
 		if alloyData.ExtraIngredientID != nil {
-			if extraNode, err := buildResultTreeRecursive(
+			if extraNode, err := BuildResultTreeRecursive(
 				*alloyData.ExtraIngredientID, amountMB, percentages, visited, level+1, maxLevel, svc,
 			); err == nil && extraNode != nil {
 				node.Children = append(node.Children, extraNode)
@@ -89,7 +90,7 @@ func buildResultTreeRecursive(
 	} else if alloyData.Type == domain.AlloyTypeProcessed && alloyID == "steel" {
 		// Processed steel is 100% pig_iron.
 		node.Name = alloyData.Name
-		if pigNode, err := buildResultTreeRecursive(
+		if pigNode, err := BuildResultTreeRecursive(
 			"pig_iron", amountMB, percentages, visited, level+1, maxLevel, svc,
 		); err == nil && pigNode != nil {
 			node.Children = append(node.Children, pigNode)
@@ -131,7 +132,7 @@ func buildResultTreeRecursive(
 			if childMB < 1e-3 {
 				continue
 			}
-			if childNode, err := buildResultTreeRecursive(
+			if childNode, err := BuildResultTreeRecursive(
 				ing.IngredientID, childMB, percentages, visited, level+1, maxLevel, svc,
 			); err == nil && childNode != nil {
 				node.Children = append(node.Children, childNode)
@@ -146,19 +147,20 @@ func buildResultTreeRecursive(
 	return node, nil
 }
 
-// lineInfo holds everything needed to render one ASCII tree line.
-type lineInfo struct {
+// LineInfo holds everything needed to render one ASCII tree line and is
+// exported so adapters can render it with their toolkit.
+type LineInfo struct {
 	PrefixParts []bool // true means ancestor was last at that depth
 	IsLast      bool   // Is this node the last child at its level?
 	Text        string // Node label, e.g. "Copper (221.25mB | 2.212Ing)"
 }
 
-// collectLines walks nodes and appends lineInfo entries.
-func collectLines(nodes []*calculationNode, prefixParts []bool, out *[]lineInfo) {
+// collectLines walks nodes and appends LineInfo entries.
+func collectLines(nodes []*CalculationNode, prefixParts []bool, out *[]LineInfo) {
 	for i, node := range nodes {
 		isLast := i == len(nodes)-1
 		lineText := fmt.Sprintf("%s (%.2fmB | %.3fIng)", node.Name, node.AmountMB, node.AmountIngots)
-		*out = append(*out, lineInfo{
+		*out = append(*out, LineInfo{
 			PrefixParts: append(append([]bool{}, prefixParts...), isLast),
 			IsLast:      isLast,
 			Text:        lineText,
@@ -169,16 +171,16 @@ func collectLines(nodes []*calculationNode, prefixParts []bool, out *[]lineInfo)
 	}
 }
 
-// formatHierarchy flattens one or more roots into lineInfo entries.
-func formatHierarchy(roots []*calculationNode) []lineInfo {
-	var lines []lineInfo
+// FormatHierarchy flattens one or more roots into LineInfo entries.
+func FormatHierarchy(roots []*CalculationNode) []LineInfo {
+	var lines []LineInfo
 	if len(roots) == 0 {
 		return lines
 	}
 	for idx, root := range roots {
 		isLastRoot := idx == len(roots)-1
 		lineText := fmt.Sprintf("%s (%.2fmB | %.3fIng)", root.Name, root.AmountMB, root.AmountIngots)
-		lines = append(lines, lineInfo{
+		lines = append(lines, LineInfo{
 			PrefixParts: []bool{isLastRoot}, // Top level uses a single boolean
 			IsLast:      isLastRoot,
 			Text:        lineText,

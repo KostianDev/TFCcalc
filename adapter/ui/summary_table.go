@@ -1,16 +1,15 @@
-package ui
+package adapterui
 
 import (
 	"fmt"
 	"sort"
+
 	"tfccalc/usecase/alloy"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
 )
-
-// Summary table helpers.
 
 // InitSummaryTable constructs a table with columns: Material | mB | Ingots.
 func InitSummaryTable() *widget.Table {

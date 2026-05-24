@@ -6,8 +6,8 @@ import (
 
 	"fyne.io/fyne/v2/app"
 
+	adapterui "tfccalc/adapter/ui"
 	"tfccalc/data"
-	"tfccalc/ui"
 	"tfccalc/usecase/alloy"
 )
 
@@ -32,6 +32,6 @@ func main() {
 	alloyService := alloy.NewService(repo)
 
 	myApp := app.New()
-	myWindow := ui.BuildUI(myApp, alloyService)
+	myWindow := adapterui.BuildUI(myApp, alloyService)
 	myWindow.ShowAndRun()
 }
