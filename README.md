@@ -1,6 +1,6 @@
 # TFC Alloy Calculator
 
-This application calculates the required raw metal amounts needed to create specific alloys from the TerraFirmaCraft (TFC) mod for Minecraft. It provides a graphical user interface built with Go and the Fyne toolkit, and relies on a local MySQL database (launched via Docker Compose) to store alloy definitions and default percentages.
+This application calculates the required raw metal amounts needed to create specific alloys from the TerraFirmaCraft (TFC) mod for Minecraft. It provides a graphical user interface built with Go and the Fyne toolkit, and uses a JSON data file by default for alloy definitions and default percentages.
 
 ## Features
 
@@ -29,7 +29,7 @@ Before building or running, ensure you have the following installed:
      sudo apt install build-essential libgl1-mesa-dev xorg-dev
      ```
 
-3. **Docker & Docker Compose:** Used to run MySQL in a container.
+3. **Docker & Docker Compose (Optional):** Only needed if you want to run the MySQL-backed repository.
 
    * [Get Docker](https://docs.docker.com/get-docker/)
    * [Get Docker Compose](https://docs.docker.com/compose/install/)
@@ -42,7 +42,7 @@ Before building or running, ensure you have the following installed:
 A top‐level `Makefile` helps automate DB startup, tests, building, and running:
 
 ```makefile
-# Shortcut to start DB (if needed), run unit tests, build the executable, and launch it:
+# Shortcut to run unit tests, build the executable, and launch it:
 make all
 
 # Start MySQL container (if not running) and wait until it is accepting TCP connections:
@@ -63,7 +63,17 @@ make run
 
 Behind the scenes, `make db-up` checks `docker-compose ps -q mysql`, and if MySQL isn’t already running, it does `docker-compose up -d`, polls port 3306 until it is open, then sleeps a few extra seconds to allow initialization.
 
-## Database Setup
+## JSON Data (Default)
+
+Alloy data is stored in [assets/alloys.json](assets/alloys.json). The app loads it by default.
+
+You can override the JSON path with:
+
+```sh
+export TFC_ALLOYS_JSON=./assets/alloys.json
+```
+
+## Database Setup (Optional)
 
 1. **Project Root** contains a `docker-compose.yml` that defines a MySQL service named `mysql`.
 2. When you run `make db-up`, Docker Compose will:
@@ -71,7 +81,11 @@ Behind the scenes, `make db-up` checks `docker-compose ps -q mysql`, and if MySQ
    * Create a default network `tfccalc_default`.
    * Launch a `tfccalc_mysql` container.
    * Wait until the container’s MySQL server is ready on `localhost:3306`.
-3. The Go code (in `data/`) will connect to `root:password@tcp(127.0.0.1:3306)/tfccalc` to load alloy definitions and default percentages.
+3. The Go code can connect to MySQL if you set:
+
+```sh
+export TFC_MYSQL_DSN="tfccalc_user:tfccalc_pass@tcp(127.0.0.1:3306)/tfccalc_db"
+```
 
 Whenever you alter the database schema or add new alloy entries, simply stop and restart:
 
@@ -111,7 +125,7 @@ Below is the typical workflow on any supported OS:
    make test
    ```
 
-   (Calculator and data‐layer tests require the database to be up.)
+   (Tests use the JSON data by default.)
 
 5. **Build the Application:**
 

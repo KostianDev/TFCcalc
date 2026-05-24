@@ -1,8 +1,8 @@
 package main
 
 import (
-	"fmt"
 	"log"
+	"os"
 
 	"fyne.io/fyne/v2/app"
 
@@ -11,11 +11,18 @@ import (
 )
 
 func main() {
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true&charset=utf8mb4",
-		"tfccalc_user", "tfccalc_pass", "127.0.0.1", 3405, "tfccalc_db",
-	)
-	if err := data.InitDB(dsn); err != nil {
-		log.Fatalf("Failed to initialize DB: %v", err)
+	jsonPath := os.Getenv("TFC_ALLOYS_JSON")
+	if jsonPath == "" {
+		jsonPath = "./assets/alloys.json"
+	}
+	if err := data.InitJSON(jsonPath); err != nil {
+		mysqlDSN := os.Getenv("TFC_MYSQL_DSN")
+		if mysqlDSN == "" {
+			log.Fatalf("Failed to initialize JSON repository: %v", err)
+		}
+		if err := data.InitMySQL(mysqlDSN); err != nil {
+			log.Fatalf("Failed to initialize MySQL repository: %v", err)
+		}
 	}
 
 	myApp := app.New()

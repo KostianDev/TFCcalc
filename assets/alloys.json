@@ -1,0 +1,156 @@
+{
+  "alloys": [
+    {
+      "id": "copper",
+      "name": "Copper",
+      "type": "base",
+      "ingredients": []
+    },
+    {
+      "id": "zinc",
+      "name": "Zinc",
+      "type": "base",
+      "ingredients": []
+    },
+    {
+      "id": "bismuth",
+      "name": "Bismuth",
+      "type": "base",
+      "ingredients": []
+    },
+    {
+      "id": "silver",
+      "name": "Silver",
+      "type": "base",
+      "ingredients": []
+    },
+    {
+      "id": "gold",
+      "name": "Gold",
+      "type": "base",
+      "ingredients": []
+    },
+    {
+      "id": "nickel",
+      "name": "Nickel",
+      "type": "base",
+      "ingredients": []
+    },
+    {
+      "id": "pig_iron",
+      "name": "Pig Iron",
+      "type": "base",
+      "ingredients": []
+    },
+    {
+      "id": "bismuth_bronze",
+      "name": "Bismuth Bronze",
+      "type": "alloy",
+      "ingredients": [
+        {"ingredient_id": "copper", "min_pct": 85, "max_pct": 92},
+        {"ingredient_id": "bismuth", "min_pct": 8, "max_pct": 15}
+      ]
+    },
+    {
+      "id": "black_bronze",
+      "name": "Black Bronze",
+      "type": "alloy",
+      "ingredients": [
+        {"ingredient_id": "copper", "min_pct": 50, "max_pct": 70},
+        {"ingredient_id": "zinc", "min_pct": 15, "max_pct": 25},
+        {"ingredient_id": "nickel", "min_pct": 15, "max_pct": 25}
+      ]
+    },
+    {
+      "id": "brass",
+      "name": "Brass",
+      "type": "alloy",
+      "ingredients": [
+        {"ingredient_id": "copper", "min_pct": 88, "max_pct": 92},
+        {"ingredient_id": "zinc", "min_pct": 8, "max_pct": 12}
+      ]
+    },
+    {
+      "id": "rose_gold",
+      "name": "Rose Gold",
+      "type": "alloy",
+      "ingredients": [
+        {"ingredient_id": "gold", "min_pct": 75, "max_pct": 80},
+        {"ingredient_id": "silver", "min_pct": 20, "max_pct": 25}
+      ]
+    },
+    {
+      "id": "sterling_silver",
+      "name": "Sterling Silver",
+      "type": "alloy",
+      "ingredients": [
+        {"ingredient_id": "silver", "min_pct": 92.5, "max_pct": 92.5},
+        {"ingredient_id": "copper", "min_pct": 7.5, "max_pct": 7.5}
+      ]
+    },
+    {
+      "id": "steel",
+      "name": "Steel",
+      "type": "processed",
+      "ingredients": [
+        {"ingredient_id": "pig_iron", "min_pct": 100, "max_pct": 100}
+      ]
+    },
+    {
+      "id": "raw_black_steel",
+      "name": "Raw Black Steel",
+      "type": "raw_steel",
+      "ingredients": [
+        {"ingredient_id": "steel", "min_pct": 50, "max_pct": 70},
+        {"ingredient_id": "nickel", "min_pct": 15, "max_pct": 25},
+        {"ingredient_id": "black_bronze", "min_pct": 15, "max_pct": 25}
+      ]
+    },
+    {
+      "id": "raw_blue_steel",
+      "name": "Raw Blue Steel",
+      "type": "raw_steel",
+      "ingredients": [
+        {"ingredient_id": "black_steel", "min_pct": 50, "max_pct": 55},
+        {"ingredient_id": "steel", "min_pct": 20, "max_pct": 25},
+        {"ingredient_id": "bismuth_bronze", "min_pct": 10, "max_pct": 15},
+        {"ingredient_id": "sterling_silver", "min_pct": 10, "max_pct": 15}
+      ]
+    },
+    {
+      "id": "raw_red_steel",
+      "name": "Raw Red Steel",
+      "type": "raw_steel",
+      "ingredients": [
+        {"ingredient_id": "black_steel", "min_pct": 50, "max_pct": 55},
+        {"ingredient_id": "steel", "min_pct": 20, "max_pct": 25},
+        {"ingredient_id": "brass", "min_pct": 10, "max_pct": 15},
+        {"ingredient_id": "rose_gold", "min_pct": 10, "max_pct": 15}
+      ]
+    },
+    {
+      "id": "black_steel",
+      "name": "Black Steel",
+      "type": "final_steel",
+      "raw_form_id": "raw_black_steel",
+      "extra_ingredient_id": "pig_iron",
+      "ingredients": []
+    },
+    {
+      "id": "blue_steel",
+      "name": "Blue Steel",
+      "type": "final_steel",
+      "raw_form_id": "raw_blue_steel",
+      "extra_ingredient_id": "black_steel",
+      "ingredients": []
+    },
+    {
+      "id": "red_steel",
+      "name": "Red Steel",
+      "type": "final_steel",
+      "raw_form_id": "raw_red_steel",
+      "extra_ingredient_id": "black_steel",
+      "ingredients": []
+    }
+  ]
+}

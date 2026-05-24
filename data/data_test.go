@@ -3,16 +3,14 @@ package data
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"testing"
 )
 
 func TestMain(m *testing.M) {
-	dsn := fmt.Sprintf(
-		"%s:%s@tcp(%s:%d)/%s?parseTime=true&charset=utf8mb4",
-		"tfccalc_user", "tfccalc_pass", "127.0.0.1", 3405, "tfccalc_db",
-	)
-	if err := InitDB(dsn); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to initialize DB: %v\n", err)
+	jsonPath := filepath.Join("..", "assets", "alloys.json")
+	if err := InitJSON(jsonPath); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to initialize JSON repository: %v\n", err)
 		os.Exit(1)
 	}
 	os.Exit(m.Run())

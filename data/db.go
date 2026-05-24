@@ -1,4 +1,3 @@
-// tfccalc/data/db.go
 package data
 
 import (
@@ -6,6 +5,7 @@ import (
 	"sync"
 
 	"tfccalc/domain"
+	jsonrepo "tfccalc/repository/json"
 	mysqlrepo "tfccalc/repository/mysql"
 )
 
@@ -35,9 +35,23 @@ var (
 // InitDB opens a connection to MySQL using the provided DSN.
 // Call this once at program start (e.g. in main).
 func InitDB(dsn string) error {
+	return InitMySQL(dsn)
+}
+
+// InitMySQL sets up the MySQL-backed repository.
+func InitMySQL(dsn string) error {
 	var err error
 	initOnce.Do(func() {
 		repo, err = mysqlrepo.NewRepository(dsn)
+	})
+	return err
+}
+
+// InitJSON sets up the JSON-backed repository.
+func InitJSON(path string) error {
+	var err error
+	initOnce.Do(func() {
+		repo, err = jsonrepo.NewRepositoryFromFile(path)
 	})
 	return err
 }

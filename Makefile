@@ -11,7 +11,7 @@ BINARY := tfccalc
 
 .PHONY: all db-up db-down test build run
 
-all: db-up test build run
+all: test build run
 
 # Start MySQL only if not already running, then wait a fixed time for initialization
 db-up:
