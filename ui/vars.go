@@ -5,16 +5,18 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-// У цьому файлі ми зберігаємо всі глобальні змінні, що використовуються в різних
-// файлах пакету ui. Завдяки цьому вони будуть “visible” в інших файлах.
-
 var (
-	// Список імен сплавів та мапа name → ID
 	alloyNames []string
 	alloyIDs   map[string]string
 
-	// Для зберігання Entry-поле % для кожного інгредієнта сплаву
-	alloyPercentageEntries map[string]map[string]*widget.Entry
+	// Stores slider controls for each alloy ingredient percentage.
+	alloyPercentageControls map[string]map[string]*percentageControl
+
+	// Per-alloy warning label for auto-clamp messages.
+	alloyPercentageWarnings map[string]*widget.Label
+
+	// Per-alloy guard to avoid recursive slider updates.
+	alloyPercentageUpdating map[string]bool
 
 	// Accordion, куди ми кладемо всі “Configure: <Alloy>” пункти
 	percentageAccordion *widget.Accordion

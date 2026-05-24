@@ -74,7 +74,9 @@ func BuildUI(app fyne.App) fyne.Window {
 		currentAlloyID = newID
 
 		// When user chooses a new alloy, clear previous percentage fields and the tree.
-		alloyPercentageEntries = make(map[string]map[string]*widget.Entry)
+		alloyPercentageControls = make(map[string]map[string]*percentageControl)
+		alloyPercentageWarnings = make(map[string]*widget.Label)
+		alloyPercentageUpdating = make(map[string]bool)
 		percentageAccordion.Items = nil
 
 		// Build accordion items recursively starting from the raw form if this is final_steel.
@@ -122,6 +124,9 @@ func BuildUI(app fyne.App) fyne.Window {
 
 	// 6) Percentage accordion inside a scroll container
 	percentageAccordion = widget.NewAccordion()
+	alloyPercentageControls = make(map[string]map[string]*percentageControl)
+	alloyPercentageWarnings = make(map[string]*widget.Label)
+	alloyPercentageUpdating = make(map[string]bool)
 	accordionScroll := container.NewVScroll(percentageAccordion)
 	accordionScroll.SetMinSize(fyne.NewSize(0, 200))
 
@@ -157,50 +162,13 @@ func BuildUI(app fyne.App) fyne.Window {
 		// 9.1) Collect user‐entered percentages into userPercs
 		userPercs := make(map[string]map[string]float64)
 		var validationErrors []string
-		for alloyID, entryMap := range alloyPercentageEntries {
-			tmp := make(map[string]float64)
-			useCustom := false
-			defaultPerc, _ := calculator.GetDefaultPercentages(alloyID)
+		for alloyID, controlMap := range alloyPercentageControls {
 			alloyInfo, _ := data.GetAlloyByID(alloyID)
-			for ingID, entry := range entryMap {
-				if entry.Text != "" {
-					val, err2 := strconv.ParseFloat(entry.Text, 64)
-					if err2 != nil {
-						validationErrors = append(
-							validationErrors,
-							fmt.Sprintf("Invalid %% for %s in %s",
-								data.GetAlloyNameByID(ingID),
-								data.GetAlloyNameByID(alloyID),
-							),
-						)
-						continue
-					}
-					tmp[ingID] = val
-					useCustom = true
-				}
+			finalPerc := make(map[string]float64)
+			for ingID, ctl := range controlMap {
+				finalPerc[ingID] = ctl.slider.Value
 			}
-			if useCustom || len(alloyInfo.Ingredients) > 0 {
-				finalPerc := make(map[string]float64)
-				for k, v := range tmp {
-					finalPerc[k] = v
-				}
-				if defaultPerc != nil {
-					for _, ing := range alloyInfo.Ingredients {
-						if _, exists := finalPerc[ing.IngredientID]; !exists {
-							if defv, ok := defaultPerc[ing.IngredientID]; ok {
-								finalPerc[ing.IngredientID] = defv
-							} else {
-								validationErrors = append(
-									validationErrors,
-									fmt.Sprintf("No default for %s in %s",
-										data.GetAlloyNameByID(ing.IngredientID),
-										data.GetAlloyNameByID(alloyID),
-									),
-								)
-							}
-						}
-					}
-				}
+			if len(alloyInfo.Ingredients) > 0 {
 				valid, errv := calculator.ValidatePercentages(alloyID, finalPerc)
 				if !valid {
 					validationErrors = append(
