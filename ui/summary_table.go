@@ -48,6 +48,7 @@ func InitSummaryTable() *widget.Table {
 			} else {
 				lbl.SetText("")
 			}
+			lbl.Refresh()
 		},
 	)
 	table.SetColumnWidth(0, 200)

@@ -55,12 +55,14 @@ func createPercentageInputsForAlloy(alloyID string) (fyne.CanvasObject, error) {
 		alloyPercentageUpdating[alloyID] = true
 		for _, ctl := range currentMap {
 			if val, ok := defaultPerc[ctl.ingredient]; ok {
-				ctl.slider.Value = val
+				ctl.slider.SetValue(val)
 				ctl.valueLabel.SetText(fmt.Sprintf("%.1f%%", val))
+				ctl.valueLabel.Refresh()
 				ctl.defaultVal = val
 			}
 			ctl.lockToggle.SetChecked(false)
 			ctl.slider.Enable()
+			ctl.slider.Refresh()
 		}
 		if warning := alloyPercentageWarnings[alloyID]; warning != nil {
 			warning.SetText("")
@@ -97,8 +99,9 @@ func createPercentageInputsForAlloy(alloyID string) (fyne.CanvasObject, error) {
 
 		if defaultPerc != nil {
 			if val, found := defaultPerc[ingredientID]; found {
-				slider.Value = val
+				slider.SetValue(val)
 				valueLabel.SetText(fmt.Sprintf("%.1f%%", val))
+				valueLabel.Refresh()
 				ctl.defaultVal = val
 			}
 		}
@@ -192,8 +195,10 @@ func rebalanceAlloyPercentages(alloyID, changedID string, requested float64) boo
 	clampedValue := clamp(requested, minAllowed, maxAllowed)
 	clamped := math.Abs(clampedValue-requested) > 1e-6
 
-	changed.slider.Value = clampedValue
+	changed.slider.SetValue(clampedValue)
 	changed.valueLabel.SetText(fmt.Sprintf("%.1f%%", clampedValue))
+	changed.valueLabel.Refresh()
+	changed.slider.Refresh()
 
 	if len(adjustable) == 0 {
 		return clamped
@@ -233,8 +238,10 @@ func rebalanceAlloyPercentages(alloyID, changedID string, requested float64) boo
 	}
 
 	for ctl, val := range values {
-		ctl.slider.Value = val
+		ctl.slider.SetValue(val)
 		ctl.valueLabel.SetText(fmt.Sprintf("%.1f%%", val))
+		ctl.valueLabel.Refresh()
+		ctl.slider.Refresh()
 	}
 
 	return clamped
