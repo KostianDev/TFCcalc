@@ -16,207 +16,20 @@ import (
 
 // BuildAnvilTab constructs the Anvil tab UI and wires it to the forging service.
 func BuildAnvilTab(svc *forginguc.Service) fyne.CanvasObject {
-	// Target input (integer 0..150)
-	targetEntry := widget.NewEntry()
-	targetEntry.PlaceHolder = "Target value (0-150)"
+	// Target input (slider 0..150)
+	targetSlider := widget.NewSlider(0, 150)
+	targetSlider.Step = 1
+	targetSlider.Value = 0 // default value
 
-	// Helper options
-	options := []string{"Any", "Hit", "Stamp", "Bend", "Upset", "Shrink", "Draw"}
+	targetValueLabel := widget.NewLabel("0")
+	targetValueLabel.Alignment = fyne.TextAlignCenter
+	targetValueLabel.TextStyle = fyne.TextStyle{Bold: true}
 
-	// makeIconDropdown builds an inline dropdown: a button row and a grid of icon buttons
-	makeIconDropdown := func(initial string, onChange func(string)) (fyne.CanvasObject, func() string, func(string)) {
-		cur := initial
-		// preview icon + label button
-		icon := canvas.NewImageFromResource(nil)
-		icon.SetMinSize(fyne.NewSize(24, 24))
-		icon.FillMode = canvas.ImageFillContain
-		lbl := widget.NewLabel(cur)
-		// wrap icon in fixed-size box so it doesn't get horizontally squashed
-		iconBg := canvas.NewRectangle(color.Transparent)
-		iconBg.SetMinSize(fyne.NewSize(24, 24))
-		iconBox := container.NewStack(iconBg, container.NewCenter(icon))
-		// we'll use a container to show icon + label
-		display := container.NewHBox(iconBox, lbl)
-
-		// options grid
-		optsGrid := container.NewGridWithColumns(4)
-		optsGrid.Hide()
-		// popup will be created after the container is available; declare here so option closures can hide it
-		var popup *widget.PopUp
-
-		// populate
-		for _, opt := range options {
-			// determine resource
-			var res fyne.Resource
-			key := ""
-			switch opt {
-			case "Hit":
-				if r, ok := ActionSprites["hit"]; ok {
-					res = r
-				} else if r, ok := ActionSprites["medium_hit"]; ok {
-					res = r
-				}
-			case "Stamp":
-				key = "stamp"
-			case "Bend":
-				key = "bend"
-			case "Upset":
-				key = "upset"
-			case "Shrink":
-				key = "shrink"
-			case "Draw":
-				key = "draw"
-			}
-			if key != "" {
-				if r, ok := ActionSprites[key]; ok {
-					res = r
-				}
-			}
-			// create option button
-			optBtn := widget.NewButtonWithIcon(opt, res, func() {
-				// placeholder; will set in closure below
-			})
-			// override tapped behavior to capture opt variable
-			o := opt
-			optBtn.OnTapped = func() {
-				cur = o
-				lbl.SetText(cur)
-				// update icon resource
-				switch cur {
-				case "", "Any":
-					icon.Resource = nil
-				case "Hit":
-					if r, ok := ActionSprites["hit"]; ok {
-						icon.Resource = r
-					} else if r, ok := ActionSprites["medium_hit"]; ok {
-						icon.Resource = r
-					} else {
-						icon.Resource = nil
-					}
-				default:
-					// map as above
-					mapKey := ""
-					switch cur {
-					case "Stamp":
-						mapKey = "stamp"
-					case "Bend":
-						mapKey = "bend"
-					case "Upset":
-						mapKey = "upset"
-					case "Shrink":
-						mapKey = "shrink"
-					case "Draw":
-						mapKey = "draw"
-					}
-					if r, ok := ActionSprites[mapKey]; ok {
-						icon.Resource = r
-					} else {
-						icon.Resource = nil
-					}
-				}
-				icon.Refresh()
-				lbl.Refresh()
-				// hide popup if present and also hide the optsGrid
-				if popup != nil && popup.Visible() {
-					popup.Hide()
-					optsGrid.Hide()
-				}
-				onChange(cur)
-			}
-			optsGrid.Add(optBtn)
-		}
-
-		// toggle behavior: show popup overlay anchored to this container
-		toggleBtn := widget.NewButton("▼", func() {
-			// popup created lazily below
-		})
-
-		// main container holds the display and toggle only; optsGrid will be shown in a PopUp overlay
-		container := container.NewVBox(container.NewHBox(display, toggleBtn))
-
-		// helper to set resource for current selection
-		updateResource := func(sel string) {
-			switch sel {
-			case "", "Any":
-				icon.Resource = nil
-			case "Hit":
-				if r, ok := ActionSprites["hit"]; ok {
-					icon.Resource = r
-				} else if r, ok := ActionSprites["medium_hit"]; ok {
-					icon.Resource = r
-				} else {
-					icon.Resource = nil
-				}
-			default:
-				mapKey := ""
-				switch sel {
-				case "Stamp":
-					mapKey = "stamp"
-				case "Bend":
-					mapKey = "bend"
-				case "Upset":
-					mapKey = "upset"
-				case "Shrink":
-					mapKey = "shrink"
-				case "Draw":
-					mapKey = "draw"
-				}
-				if r, ok := ActionSprites[mapKey]; ok {
-					icon.Resource = r
-				} else {
-					icon.Resource = nil
-				}
-			}
-			icon.Refresh()
-			lbl.Refresh()
-		}
-
-		// initial set
-		lbl.SetText(initial)
-		updateResource(initial)
-
-		// position popup below the display when showing
-		toggleBtn.OnTapped = func() {
-			if popup != nil && popup.Visible() {
-				popup.Hide()
-				return
-			}
-			// lazy-create popup when we have a canvas; otherwise fallback to inline grid
-			if popup == nil {
-				canvasFor := fyne.CurrentApp().Driver().CanvasForObject(container)
-				if canvasFor == nil {
-					// fallback: toggle inline visibility
-					if optsGrid.Visible() {
-						optsGrid.Hide()
-					} else {
-						optsGrid.Show()
-					}
-					return
-				}
-				popup = widget.NewPopUp(optsGrid, canvasFor)
-			}
-			// ensure options are visible inside popup
-			optsGrid.Show()
-			// position popup under the display using relative position helper
-			rel := fyne.NewPos(0, display.Size().Height+2)
-			popup.ShowAtRelativePosition(rel, display)
-		}
-
-		return container, func() string { return cur }, func(s string) {
-			cur = s
-			lbl.SetText(cur)
-			updateResource(cur)
-			onChange(cur)
-		}
+	targetSlider.OnChanged = func(val float64) {
+		targetValueLabel.SetText(strconv.Itoa(int(val)))
 	}
 
-	// NOTE: dropdowns created after setIcon is defined so we can pass callbacks
-
-	// result area will show icons horizontally
-	resultBox := container.NewHBox()
-
-	resultLabel := widget.NewLabel("")
-	resultLabel.Wrapping = fyne.TextWrapWord
+	targetContainer := container.NewBorder(nil, nil, nil, targetValueLabel, targetSlider)
 
 	// try load sprites (order must match sprite layout)
 	_ = LoadActionSprites("./assets/anvil-hits.png", []string{
@@ -224,38 +37,128 @@ func BuildAnvilTab(svc *forginguc.Service) fyne.CanvasObject {
 		"stamp", "bend", "upset", "shrink",
 	})
 
-	// no external icon setter needed; dropdown setter will update its own icon
+	getPaletteIcon := func(sel string) fyne.Resource {
+		switch sel {
+		case "Hit":
+			if r, ok := ActionSprites["hit"]; ok {
+				return r
+			}
+			return ActionSprites["medium_hit"]
+		case "Stamp":
+			return ActionSprites["stamp"]
+		case "Bend":
+			return ActionSprites["bend"]
+		case "Upset":
+			return ActionSprites["upset"]
+		case "Shrink":
+			return ActionSprites["shrink"]
+		case "Draw":
+			return ActionSprites["draw"]
+		}
+		return nil
+	}
 
-	// create three icon dropdowns (they manage their own preview icon)
-	selAObj, selAGet, selASet := makeIconDropdown("Any", func(s string) {})
-	selBObj, selBGet, selBSet := makeIconDropdown("Any", func(s string) {})
-	selCObj, selCGet, selCSet := makeIconDropdown("Any", func(s string) {})
+	activeSlot := 0
+	slotVals := []string{"Any", "Any", "Any"}
 
-	// (removed temporary textual debug output)
+	type slotObj struct {
+		bg  *canvas.Rectangle
+		img *canvas.Image
+		btn *widget.Button
+		box *fyne.Container
+	}
+	var slots [3]*slotObj
+
+	var refreshSlots func()
+
+	slotsRow := container.NewHBox()
+	for i := 0; i < 3; i++ {
+		s := &slotObj{}
+		s.bg = canvas.NewRectangle(color.NRGBA{R: 0x22, G: 0x22, B: 0x22, A: 0xff})
+		s.bg.StrokeColor = color.NRGBA{R: 0x55, G: 0x55, B: 0x55, A: 0xff}
+		s.bg.StrokeWidth = 2
+		s.bg.SetMinSize(fyne.NewSize(48, 48))
+		s.img = canvas.NewImageFromResource(nil)
+		s.img.SetMinSize(fyne.NewSize(32, 32))
+		s.img.FillMode = canvas.ImageFillContain
+
+		idx := i
+		s.btn = widget.NewButton("", func() {
+			activeSlot = idx
+			refreshSlots()
+		})
+		s.btn.Importance = widget.LowImportance
+
+		s.box = container.NewStack(s.bg, container.NewCenter(s.img), s.btn)
+		slots[i] = s
+		slotsRow.Add(s.box)
+	}
+
+	refreshSlots = func() {
+		for i := 0; i < 3; i++ {
+			if i == activeSlot {
+				slots[i].bg.StrokeColor = color.NRGBA{R: 0xff, G: 0x99, B: 0x33, A: 0xff}
+				slots[i].bg.FillColor = color.NRGBA{R: 0x55, G: 0x44, B: 0x33, A: 0xff} // Active slot highlight
+			} else {
+				slots[i].bg.StrokeColor = color.NRGBA{R: 0x55, G: 0x55, B: 0x55, A: 0xff}
+				slots[i].bg.FillColor = color.NRGBA{R: 0x22, G: 0x22, B: 0x22, A: 0xff}
+			}
+			slots[i].bg.Refresh()
+
+			res := getPaletteIcon(slotVals[i])
+			if res == nil {
+				slots[i].img.Hide()
+			} else {
+				slots[i].img.Resource = res
+				slots[i].img.Show()
+			}
+			slots[i].img.Refresh()
+		}
+	}
+	// Initial refresh
+	refreshSlots()
+
+	// Palette of actions
+	paletteOptions := []string{"Any", "Hit", "Stamp", "Bend", "Upset", "Shrink", "Draw"}
+	paletteGrid := container.NewGridWrap(fyne.NewSize(120, 40))
+	for _, opt := range paletteOptions {
+		o := opt
+		pBtn := widget.NewButtonWithIcon(o, getPaletteIcon(o), func() {
+			slotVals[activeSlot] = o
+			activeSlot = (activeSlot + 1) % 3
+			refreshSlots()
+		})
+		paletteGrid.Add(pBtn)
+	}
+
+	// Result area
+	resultBox := container.NewHBox()
+	resultScroll := container.NewHScroll(resultBox)
+	resultScroll.SetMinSize(fyne.NewSize(0, 120)) // assure enough height
+
+	resultLabel := widget.NewLabel("")
+	resultLabel.Wrapping = fyne.TextWrapWord
 
 	solveButton := widget.NewButton("Solve", func() {
-		// Clear previous result
 		resultLabel.SetText("")
+		resultBox.Objects = nil
 
-		// Parse target
-		tstr := targetEntry.Text
-		tval, err := strconv.Atoi(tstr)
-		if err != nil || tval < 0 || tval > 150 {
+		tval := int(targetSlider.Value)
+		if tval < 0 || tval > 150 {
 			resultLabel.SetText("Enter a valid integer target between 0 and 150.")
+			resultBox.Add(resultLabel)
+			resultBox.Refresh()
 			return
 		}
 
-		// Build pattern
 		var pattern [3]domain.FinalRequirement
-		sels := []string{selAGet(), selBGet(), selCGet()}
-		for i, s := range sels {
+		for i, s := range slotVals {
 			switch s {
 			case "", "Any":
 				pattern[i] = domain.FinalRequirement{Kind: domain.FinalAny}
 			case "Hit":
 				pattern[i] = domain.FinalRequirement{Kind: domain.FinalHit}
 			default:
-				// Exact action
 				var act domain.ForgeAction
 				switch s {
 				case "Stamp":
@@ -276,19 +179,31 @@ func BuildAnvilTab(svc *forginguc.Service) fyne.CanvasObject {
 			}
 		}
 
-		// Solve
 		seq, err := svc.SolveForTarget(tval, pattern)
 		if err != nil {
-			resultBox.Objects = nil
 			resultBox.Add(resultLabel)
 			resultLabel.SetText(fmt.Sprintf("No solution: %v", err))
 			resultBox.Refresh()
 			return
 		}
 
-		// Build icon sequence
-		resultBox.Objects = nil
+		currentValue := 0
 		for i, a := range seq {
+			delta := domain.ForgeActionDelta[a]
+			currentValue += delta
+
+			deltaStr := fmt.Sprintf("%+d", delta)
+			deltaLbl := canvas.NewText(deltaStr, color.NRGBA{R: 170, G: 170, B: 170, A: 255})
+			deltaLbl.TextSize = 12
+			deltaLbl.Alignment = fyne.TextAlignCenter
+
+			valLbl := canvas.NewText(strconv.Itoa(currentValue), color.NRGBA{R: 255, G: 255, B: 255, A: 255})
+			valLbl.TextSize = 14
+			valLbl.Alignment = fyne.TextAlignCenter
+			if currentValue < 0 || currentValue > 150 {
+				valLbl.Color = color.NRGBA{R: 255, G: 100, B: 100, A: 255} // Highlight out of bounds intermediate
+			}
+
 			key := ""
 			switch a {
 			case domain.WeakHit:
@@ -308,6 +223,7 @@ func BuildAnvilTab(svc *forginguc.Service) fyne.CanvasObject {
 			case domain.Shrink:
 				key = "shrink"
 			}
+
 			var img *canvas.Image
 			if r, ok := ActionSprites[key]; ok {
 				img = canvas.NewImageFromResource(r)
@@ -316,67 +232,48 @@ func BuildAnvilTab(svc *forginguc.Service) fyne.CanvasObject {
 			}
 			img.SetMinSize(fyne.NewSize(32, 32))
 			img.FillMode = canvas.ImageFillContain
-			// highlight last three with an outer border and inner background
+
+			var iconLayout fyne.CanvasObject
 			if i >= len(seq)-3 {
 				outer := canvas.NewRectangle(color.NRGBA{R: 0xff, G: 0x99, B: 0x33, A: 0xff})
 				outer.SetMinSize(fyne.NewSize(40, 40))
 				inner := canvas.NewRectangle(color.NRGBA{R: 0x22, G: 0x22, B: 0x22, A: 0xff})
 				inner.SetMinSize(fyne.NewSize(36, 36))
-				wrapped := container.NewStack(outer, inner, container.NewCenter(img))
-				resultBox.Add(wrapped)
+				iconLayout = container.NewStack(outer, inner, container.NewCenter(img))
 			} else {
-				resultBox.Add(img)
+				iconLayout = container.NewCenter(img)
 			}
-			// textual debug removed
+
+			col := container.NewVBox(deltaLbl, iconLayout, valLbl)
+			resultBox.Add(col)
 		}
 		resultBox.Refresh()
-
 	})
+
+	resetBtn := widget.NewButton("Reset", func() {
+		targetSlider.SetValue(0)
+		activeSlot = 0
+		slotVals[0], slotVals[1], slotVals[2] = "Any", "Any", "Any"
+		refreshSlots()
+		resultBox.Objects = nil
+		resultLabel.SetText("")
+		resultBox.Refresh()
+	})
+
+	btnBox := container.NewHBox(solveButton, resetBtn)
 
 	// Layout
 	form := container.NewVBox(
 		widget.NewLabel("Anvil Forging"),
-		widget.NewLabel("Target value (0..150):"),
-		targetEntry,
-		widget.NewLabel("Final three actions (in order, leave empty for Any):"),
-		// place selectors close together
-		container.NewHBox(selAObj, selBObj, selCObj),
-		solveButton,
+		widget.NewLabel("Target value:"),
+		targetContainer,
+		widget.NewLabel("Final three actions (click slot to select, then pick from palette):"),
+		slotsRow,
+		paletteGrid,
+		btnBox,
 		widget.NewLabel("Result sequence (last three are final):"),
-		resultBox,
+		resultScroll, // scrollable area for sequence
 	)
-
-	// Initialize selects to Any (also updates preview icons)
-	selASet("Any")
-	selBSet("Any")
-	selCSet("Any")
-
-	// Preview grid showing each option with icon and text for verification
-	preview := container.NewGridWithColumns(4)
-	ordered := []struct {
-		key   string
-		label string
-	}{
-		{"weak_hit", "Hit, Light"},
-		{"medium_hit", "Hit, Medium"},
-		{"strong_hit", "Hit, Heavy"},
-		{"draw", "Draw"},
-		{"stamp", "Punch/Stamp"},
-		{"bend", "Bend"},
-		{"upset", "Upset"},
-		{"shrink", "Shrink"},
-	}
-	for _, e := range ordered {
-		var img *canvas.Image
-		if r, ok := ActionSprites[e.key]; ok {
-			img = canvas.NewImageFromResource(r)
-		} else {
-			img = canvas.NewImageFromResource(nil)
-		}
-		img.SetMinSize(fyne.NewSize(24, 24))
-		lbl := widget.NewLabel(e.label)
-		preview.Add(container.NewHBox(img, lbl))
-	}
 
 	return form
 }
